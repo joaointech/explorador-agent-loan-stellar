@@ -11,6 +11,19 @@ const nextConfig: NextConfig = {
     "/api/admin/cpcv": ["./zk/**/*"],
     "/api/admin/demo/**": ["./zk/**/*"],
   },
+  // explorador.pt (../irrealista) answers every locale-less path with a 308 to
+  // /pt…, and browsers cache that per origin: after running it on
+  // localhost:3000, visiting / lands on /pt. Serve those paths as our own
+  // routes. A rewrite, not a redirect, so it can't loop with the cached 308;
+  // pages keep their server-side auth guards.
+  async rewrites() {
+    return [
+      { source: "/pt", destination: "/" },
+      { source: "/en", destination: "/" },
+      { source: "/pt/:path*", destination: "/:path*" },
+      { source: "/en/:path*", destination: "/:path*" },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

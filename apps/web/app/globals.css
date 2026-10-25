@@ -253,6 +253,11 @@
   dialog::backdrop {
     background: var(--color-overlay);
   }
+
+  /* No page scroll behind an open modal dialog or sheet. */
+  html:has(dialog[open]:modal) {
+    overflow: hidden;
+  }
 }
 
 /* explorador wordmark: Sora 400 at 1.4rem with no extra tracking (as in the

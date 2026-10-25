@@ -170,6 +170,24 @@ export function daysBetween(from: DateInput, to: DateInput): number {
   return Math.floor(toUnixSeconds(to) / DAY_SECS) - Math.floor(toUnixSeconds(from) / DAY_SECS);
 }
 
+/** Countdown clock: "45d 03h 12m 09s" over a day, "03:12:09" under a day (negative → zero). */
+export function formatCountdown(secs: number): string {
+  const s = Math.max(0, Math.floor(secs));
+  const d = Math.floor(s / DAY_SECS);
+  const h = Math.floor((s % DAY_SECS) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return d > 0 ? `${d}d ${pad2(h)}h ${pad2(m)}m ${pad2(sec)}s` : `${pad2(h)}:${pad2(m)}:${pad2(sec)}`;
+}
+
+/** Days remaining as a status line: "45 days left", "Due tomorrow", "Due today", "Overdue by 3 days". */
+export function formatDaysLeft(days: number): string {
+  if (days > 1) return `${days} days left`;
+  if (days === 1) return "Due tomorrow";
+  if (days === 0) return "Due today";
+  return `Overdue by ${-days} ${days === -1 ? "day" : "days"}`;
+}
+
 /**
  * Day-granular relative phrase from `now` to `target`: "today", "tomorrow",
  * "in 45 days", "yesterday", "3 days ago". Both are read as protocol-clock

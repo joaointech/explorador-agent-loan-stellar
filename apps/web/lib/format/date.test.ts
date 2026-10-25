@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   daysBetween,
+  formatCountdown,
   formatDate,
   formatDateTime,
+  formatDaysLeft,
   formatDuration,
   formatRelativeDays,
   formatShortDate,
@@ -103,6 +105,17 @@ describe("durations and relative days", () => {
     expect(formatDuration(0)).toBe("0 sec");
     expect(formatDuration(-120)).toBe("2 min");
     expect(formatDuration(45 * 86_400 + 3 * 3600 + 120, { maxUnits: 3, style: "short" })).toBe("45d 3h 2m");
+  });
+
+  it("formats countdown clocks and days left", () => {
+    expect(formatCountdown(45 * 86_400 + 3 * 3600 + 12 * 60 + 9)).toBe("45d 03h 12m 09s");
+    expect(formatCountdown(3 * 3600 + 5)).toBe("03:00:05");
+    expect(formatCountdown(-5)).toBe("00:00:00");
+    expect(formatDaysLeft(45)).toBe("45 days left");
+    expect(formatDaysLeft(1)).toBe("Due tomorrow");
+    expect(formatDaysLeft(0)).toBe("Due today");
+    expect(formatDaysLeft(-1)).toBe("Overdue by 1 day");
+    expect(formatDaysLeft(-3)).toBe("Overdue by 3 days");
   });
 
   it("counts calendar days and phrases them", () => {

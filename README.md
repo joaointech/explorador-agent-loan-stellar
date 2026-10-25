@@ -24,7 +24,8 @@ Hackathon build. **Stellar testnet only.** Lives at `advance.explorador.ai`.
 - [Signing in to the demo](#signing-in-to-the-demo)
 - [Card payments: Lithic sandbox or the simulated network](#card-payments-lithic-sandbox-or-the-simulated-network)
 - [Signed CPCV upload and AI prefill](#signed-cpcv-upload-and-ai-prefill)
-- [Deploying to Vercel + Neon](#deploying-to-vercel--neon)
+- [Deploying to AWS (production)](#deploying-to-aws-production)
+- [Alternative: Vercel + Neon](#alternative-vercel--neon)
 - [Testing](#testing)
 - [5-minute demo script](#5-minute-demo-script)
 - [Trust model](#trust-model)
@@ -156,6 +157,8 @@ packages/contracts-ts/    TypeScript bindings generated from the wasm (reference
 deployments/testnet.json  contract ids, wasm hashes, roles and tx hashes of the active deployment
 docs/reference.md         contract interface, API routes, events and error codes
 docker-compose.yml        Postgres 16 for local development (host port 5433)
+deploy/                   production image (Dockerfile, entrypoint) and swarm stack (stack-aws.yml)
+deploy-aws.sh             build, push to ECR and roll out on explorador's AWS swarm (CI: .github/workflows/deploy.yml)
 ```
 
 ## Live testnet deployment
@@ -184,7 +187,7 @@ There have been 13 card draws, 2 settlements and 1 cancellation. The pool holds 
 
 Agent smart accounts use the OpenZeppelin contracts that smart-account-kit 0.8.0 deployed on testnet: account wasm `1b5f4534…785a`, WebAuthn verifier [`CC7EKIHQ…OM3F`](https://stellar.expert/explorer/testnet/contract/CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F), Ed25519 verifier [`CAAVTMCB…HKN4`](https://stellar.expert/explorer/testnet/contract/CAAVTMCBXEIBPR64EAASKFXERVPYFZA2JYP5A3BG6PESWEFUJX5IHKN4).
 
-> **`token_uri` caveat.** `cpcv_note`'s `base_uri` is fixed at deploy. This deployment was made from a development machine, so `token_uri(id)` points at `http://localhost:3112/api/notes/<id>`. The production reset described in [Deploying to Vercel + Neon](#deploying-to-vercel--neon) fixes it.
+> **`token_uri` caveat.** `cpcv_note`'s `base_uri` is fixed at deploy. This deployment was made from a development machine, so `token_uri(id)` points at `http://localhost:3112/api/notes/<id>`. A reset with the production `APP_URL` fixes it (see [Deploying to AWS](#deploying-to-aws-production)).
 
 ## Prerequisites
 
@@ -262,7 +265,29 @@ On **Admin → New CPCV** the admin can drop the signed CPCV (a PDF of at most 4
 - Try it with [`docs/samples/cpcv-exemplo.pdf`](./docs/samples/cpcv-exemplo.pdf), a synthetic CPCV with invented people and numbers (regenerate it with `pnpm --filter @advance/scripts sample:cpcv`): two buyers, a company seller, a flat under construction, signed 20 Oct 2026 with the deed due within 24 months (20 Oct 2028), and no agency commission stated (enter it yourself). If the demo clock is already past 20 Oct 2028, the form asks for a later escritura date.
 - The PDF holds personal data. It never goes on-chain or into a public API, and unused uploads are deleted after 24 h. With the prefill on it is sent to the Anthropic API; a production deployment needs the appropriate data-processing terms with Anthropic.
 
-## Deploying to Vercel + Neon
+## Deploying to AWS (production)
+
+Production runs on explorador's AWS Docker Swarm (eu-west-2) behind `prod-apps-alb`, deployed the same way as explorador.pt: stack `advance`, service `advance_web`, host port 8106 → container 3000, at https://advance.explorador.ai.
+
+- **Image** ([`deploy/Dockerfile`](./deploy/Dockerfile), context = repo root): the Next.js standalone server (`output: "standalone"` only when `BUILD_STANDALONE=1`, so `next start` and Vercel are unchanged) on `node:24.22.1-trixie-slim`, as a non-root user. [`deploy/docker-entrypoint.sh`](./deploy/docker-entrypoint.sh) runs `prisma migrate deploy`, then the server, and refuses to start without `DATABASE_URL`. The image carries `zk/` and `deployments/testnet.json` (the contract ids used until the database has an active `Deployment` row). It takes no build args: nothing is `NEXT_PUBLIC_`.
+- **Config:** Secrets Manager `prod-advance-web-env`, dotenv text with the variables of `apps/web/.env.local` and the production values listed in step 4 of the Vercel steps below. `deploy-aws.sh` writes it to `web.env` on the manager and strips quotes and inline comments, because docker's `env_file` keeps values verbatim. The next deploy picks up a changed secret (env-drift check → stack deploy).
+- **Database:** `DATABASE_URL` on the shared RDS with `?sslmode=verify-full` and the RDS endpoint hostname. The image trusts the Amazon RDS CAs (`NODE_EXTRA_CA_CERTS`).
+- **CI:** [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) deploys each push to `main` that touches the app or the deploy files, and runs on manual dispatch. An `ubuntu-latest` runner builds `linux/amd64`, pushes `advance-web:prod-<sha>` to ECR, rolls the service and waits until the new task is healthy. AWS access goes through the OIDC role `gha-oidc-advance-deploy`; the repo secret `SWARM_SSH_KEY` holds the swarm key.
+- **By hand** (AWS profile `bitnata-new`, swarm key in `~/.ssh/id_rsa`):
+
+  ```bash
+  ./deploy-aws.sh web                                    # rsync to the swarm worker, build there, push, roll
+  LOCAL_BUILD=1 ./deploy-aws.sh web                      # build here (linux/amd64: slow under emulation on Apple silicon)
+  ./deploy-aws.sh web --deploy-only --tag prod-abc1234   # roll an image already in ECR
+  ./deploy-aws.sh web --stack                            # also re-apply deploy/stack-aws.yml
+  ```
+
+- **Try the image locally:** `docker build -f deploy/Dockerfile -t advance-web:local .`, then `docker run --rm -p 3300:3000 --add-host=host.docker.internal:host-gateway -e DATABASE_URL=postgresql://advance:advance@host.docker.internal:5433/<db> -e SESSION_SECRET=<32+ chars> advance-web:local`.
+- **Contracts and demo data:** the RDS has no public endpoint, so reset from the site (Admin → Demo → **Reset demo** uses the deployment's own `APP_URL`), or run `pnpm demo:reset` through the bastion tunnel.
+- **Lithic:** `pnpm lithic:enroll --url https://advance.explorador.ai`, add the printed `LITHIC_ASA_HMAC_SECRET` to the secret and redeploy.
+- **Crons:** `apps/web/vercel.json` doesn't run on the swarm. Both jobs are safety nets: reads sync the indexer, and admin dashboard loads retry card draws. Call them with `Authorization: Bearer $CRON_SECRET` if needed.
+
+## Alternative: Vercel + Neon
 
 1. **Neon.** Create a project in a region close to your Vercel functions (e.g. AWS Frankfurt with Vercel `fra1`). The ASA must answer within about 2 s, and each decision makes several database round trips. Keep two connection strings: the **pooled** one for the app and the **direct** one for migrations.
 2. **Migrate:** `DATABASE_URL='<neon direct url>' pnpm --filter web db:deploy` (`prisma migrate deploy`).

@@ -36,7 +36,6 @@ const twMerge = extendTailwindMerge({
         "chart-1",
         "chart-2",
         "chart-3",
-        "chart-4",
         "chart-grid",
         "chart-axis",
       ],

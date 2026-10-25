@@ -49,12 +49,13 @@
   --color-warning: #d97706;
   --color-danger: #dc2626;
 
-  /* Charts (blue-600 lines on light-blue fills; spec §10.1) */
+  /* Charts: blue-600 lines on light-blue fills (spec §10.1). Series slots in a
+     fixed order, validated for colour-vision deficiency on both surfaces
+     (dataviz validator: CVD ΔE ≥ 9, normal-vision ΔE ≥ 24). Max 3 series. */
   --color-chart-1: #2563eb;
-  --color-chart-2: #38bdf8;
-  --color-chart-3: #94a3b8;
-  --color-chart-4: #10b981;
-  --color-chart-grid: #e2e8f0;
+  --color-chart-2: #eb6834;
+  --color-chart-3: #1baf7a;
+  --color-chart-grid: #eef2f6;
   --color-chart-axis: #64748b;
 }
 
@@ -208,10 +209,9 @@
   --color-warning: #fbbf24;
   --color-danger: #f87171;
 
-  --color-chart-1: #60a5fa;
-  --color-chart-2: #7dd3fc;
-  --color-chart-3: #64748b;
-  --color-chart-4: #34d399;
+  --color-chart-1: #3b82f6;
+  --color-chart-2: #d95926;
+  --color-chart-3: #199e70;
   --color-chart-grid: #1e293b;
   --color-chart-axis: #94a3b8;
 }

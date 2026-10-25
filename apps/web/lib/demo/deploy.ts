@@ -14,7 +14,7 @@ import path from "node:path";
 
 import { Address, xdr } from "@stellar/stellar-sdk";
 
-import { db } from "@/lib/db";
+import { db, Prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { adminKeypair, networkConfig, operatorKeypair, roleKeypair, treasuryKeypair } from "@/lib/stellar/config";
 import { invalidateDeploymentCache, resolveDeployment } from "@/lib/stellar/deployment";
@@ -284,9 +284,14 @@ export async function recordDeployment(result: DeployResult, opts: { file?: stri
         wasmHashes: result.wasmHashes,
       },
     }),
+    // Note ids restart at 1 on every cpcv_note contract, but Cpcv.noteId is unique: detach the
+    // rows of the previous contracts (kept, with their PII and tx hashes) so new mints can link.
+    db.cpcv.updateMany({ where: { noteId: { not: null } }, data: { noteId: null } }),
+    // Card consent is per pool: nobody has enabled their card on the new one yet.
+    db.agent.updateMany({ data: { cardEnabledOnChain: false, cachedPosition: Prisma.DbNull, cachedAt: null } }),
   ]);
   invalidateDeploymentCache();
-  if (opts.file) writeFileSync(opts.file, `${JSON.stringify(deploymentFileContent(result), null, 2)}\n`);
+  if (opts.file) writeFileSync(/* turbopackIgnore: true */ opts.file, `${JSON.stringify(deploymentFileContent(result), null, 2)}\n`);
 }
 
 /** deployments/testnet.json: contract ids + wasm hashes (spec §7.4) plus the wiring facts worth keeping. */

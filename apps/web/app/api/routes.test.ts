@@ -286,6 +286,7 @@ const { GET: snapshotsGET } = await import("./pool/snapshots/route");
 const { GET: registryGET } = await import("./registry/route");
 const { GET: detailGET } = await import("./registry/[id]/route");
 const { GET: metadataGET } = await import("./registry/[id]/metadata/route");
+const { GET: noteUriGET } = await import("./notes/[id]/route");
 const { GET: investorGET } = await import("./investor/[address]/route");
 const { POST: faucetPOST } = await import("./faucet/teurc/route");
 const { GET: cronGET } = await import("./cron/sync/route");
@@ -499,6 +500,16 @@ describe("GET /api/registry/[id]/metadata", () => {
     const attr = Object.fromEntries(meta.attributes.map((a) => [a.trait_type, a.value]));
     expect(attr).toMatchObject({ Status: "Active", Agent: AGENT, "Total commission (EUR)": 15_000, "Credit limit (EUR)": 3_750 });
     expect(JSON.stringify(meta)).not.toContain("Maria");
+  });
+});
+
+describe("GET /api/notes/[id] (token_uri = base_uri + \"/\" + id)", () => {
+  it("serves the same SEP-50 metadata as /api/registry/[id]/metadata", async () => {
+    const alias = await noteUriGET(get("/api/notes/1"), params({ id: "1" }));
+    expect(alias.status).toBe(200);
+    const canonical = await metadataGET(get("/api/registry/1/metadata"), params({ id: "1" }));
+    expect(await alias.json()).toEqual(await canonical.json());
+    expect((await body(await noteUriGET(get("/api/notes/x"), params({ id: "x" })), error, 400)).error.code).toBe("VALIDATION_ERROR");
   });
 });
 

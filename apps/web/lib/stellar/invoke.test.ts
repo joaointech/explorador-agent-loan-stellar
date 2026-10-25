@@ -1,6 +1,7 @@
 import {
   Account,
   Address,
+  FeeBumpTransaction,
   Keypair,
   Networks,
   SorobanDataBuilder,
@@ -226,5 +227,65 @@ describe("invokeAsOperator", () => {
     const args = (fn as unknown as { invokeContract: xdr.InvokeContractArgs }).invokeContract;
     expect(String(args.functionName)).toBe("cancel");
     expect(Address.fromScAddress(args.contractAddress).toString()).toBe(POOL_ID);
+  });
+});
+
+describe("expensive and archived-state transactions", () => {
+  it("wraps the transaction in a fee bump when the resource fee exceeds the uint32 fee", async () => {
+    const resourceFee = 13_915_309_063n; // ~1,391 XLM: a cpcv_note.mint on today's testnet
+    server.simulateTransaction.mockResolvedValue({
+      ...simOk([sourceEntry("mint")]),
+      minResourceFee: resourceFee.toString(),
+      transactionData: new SorobanDataBuilder().setResourceFee(resourceFee),
+    });
+
+    const res = await invokeContract({ contractId: POOL_ID, fn: "mint", args: [], source: OPERATOR });
+
+    const sent = server.sendTransaction.mock.calls[0][0] as FeeBumpTransaction;
+    expect(sent).toBeInstanceOf(FeeBumpTransaction);
+    expect(sent.feeSource).toBe(OPERATOR.publicKey());
+    expect(BigInt(sent.fee)).toBeGreaterThan(resourceFee);
+    expect(OPERATOR.verify(Buffer.from(sent.hash()), sent.signatures[0].signature)).toBe(true);
+    const inner = sent.innerTransaction;
+    expect(inner.source).toBe(OPERATOR.publicKey());
+    expect(inner.sequence).toBe("101");
+    expect(OPERATOR.verify(Buffer.from(inner.hash()), inner.signatures[0].signature)).toBe(true);
+    const env = inner.toEnvelope();
+    const innerResourceFee = env.type === "envelopeTypeTx" && env.v1.tx.ext.type === "sorobanData" ? env.v1.tx.ext.sorobanData.resourceFee : 0n;
+    expect(innerResourceFee).toBe(resourceFee);
+    expect(invokeOp(inner).auth).toHaveLength(1);
+    expect(res.txHash).toBe(Buffer.from(sent.hash()).toString("hex"));
+  });
+
+  it("restores archived entries reported by a restore preamble, then rebuilds and submits", async () => {
+    const restore = {
+      ...simOk(),
+      restorePreamble: { minResourceFee: "70000", transactionData: new SorobanDataBuilder().setResourceFee(70_000) },
+    };
+    server.simulateTransaction.mockResolvedValueOnce(restore).mockResolvedValueOnce(simOk());
+
+    await invokeContract({ contractId: POOL_ID, fn: "card_draw", args: [], source: OPERATOR });
+
+    expect(server.sendTransaction).toHaveBeenCalledTimes(2);
+    const [restoreTx, invokeTx] = server.sendTransaction.mock.calls.map((c) => c[0] as Transaction);
+    expect(restoreTx.operations[0].type).toBe("restoreFootprint");
+    expect(invokeTx.operations[0].type).toBe("invokeHostFunction");
+    expect(server.simulateTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets another account pay while the operator signs its auth entry (invokeAsOperator source)", async () => {
+    const channel = Keypair.random();
+    server.simulateTransaction
+      .mockResolvedValueOnce(simOk([addressAuthEntry(OPERATOR.publicKey(), "card_draw")]))
+      .mockResolvedValueOnce(simOk());
+
+    await invokeAsOperator("advancePool", "card_draw", [scU32(1)], { source: channel });
+
+    const sent = server.sendTransaction.mock.calls[0][0] as Transaction;
+    expect(sent.source).toBe(channel.publicKey());
+    const info = inspectAuthEntry((invokeOp(sent).auth ?? [])[0]);
+    expect(info.address).toBe(OPERATOR.publicKey());
+    expect(info.signed).toBe(true);
+    expect(lockCalls).toEqual([advisoryLockKey(channel.publicKey())]);
   });
 });

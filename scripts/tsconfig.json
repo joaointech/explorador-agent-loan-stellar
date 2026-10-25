@@ -2,6 +2,7 @@
   "extends": "../apps/web/tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
+    "incremental": false,
     "paths": {
       "@/*": ["../apps/web/*"]
     }

@@ -48,6 +48,7 @@ Choices made where `spec.md` was silent, or where the product owner gave new dir
 - 2026-10-25: Seed agents (`@demo.explorador.pt`) are never emailed. While `DEMO_MODE=true`, `POST /api/auth/email/start` returns their code in the response (`demoCode`, `delivery: "demo"`) so the presenter and judges can sign in as them; only for existing users on that domain (cap 30 codes/hour). With `DEMO_MODE` off they can't sign in by email.
 - 2026-10-25: `/login` (email → code, minimal Tailwind; restyled later with the design system) shows a signed-in visitor "Continue / sign out and use another email" instead of redirecting: account switching works without other UI, and since that check reads the database, a stale cookie can never bounce between the proxy and the login page. After verify the browser does a full navigation to `redirectTo`. Passkey sign-in on this page is left for the agent-app / smart-accounts integration.
 - 2026-10-25: The sign-in POST routes only accept `Content-Type: application/json` (415 `UNSUPPORTED_MEDIA_TYPE` otherwise). `parseBody` parses any body, so without this a cross-site `text/plain` form could post JSON and sign a victim into the attacker's account (login CSRF).
+- 2026-10-25: Server components (layouts/pages under `/agent` and `/admin`) should call `requireAgentPage()` / `requireAdminPage()` from `lib/auth/page.ts`: database-checked like the API guards, but they redirect (`/login?next=…` or the user's home) instead of throwing. `proxy.ts` stays the fast, cookie-only first layer.
 
 ## Stellar service and indexer
 

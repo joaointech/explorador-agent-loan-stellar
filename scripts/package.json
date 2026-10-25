@@ -5,10 +5,16 @@
   "type": "module",
   "description": "Operational scripts (spec §11.1). Run from the repo root, e.g. `pnpm seed`. Env comes from apps/web/.env.local.",
   "scripts": {
+    "keys:generate": "tsx keys-generate.ts",
+    "deploy:testnet": "tsx deploy-testnet.ts",
+    "seed": "tsx seed.ts",
+    "demo:reset": "tsx demo-reset.ts",
+    "e2e": "tsx e2e.ts",
     "lithic:enroll": "tsx lithic-enroll.ts",
     "vk:soroban": "tsx vk-to-soroban.ts",
     "smoke:smart-account": "tsx smoke-smart-account.ts",
-    "indexer": "tsx indexer.ts"
+    "indexer": "tsx indexer.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^20",

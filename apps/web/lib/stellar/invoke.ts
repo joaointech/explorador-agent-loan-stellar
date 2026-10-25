@@ -13,12 +13,14 @@ import {
   inspectAuthEntry,
   rpc,
   xdr,
+  type FeeBumpTransaction,
   type Keypair,
   type Transaction,
 } from "@stellar/stellar-sdk";
 
 import { networkConfig, operatorKeypair } from "./config";
 import { requireDeployment } from "./deployment";
+import { feeFitsUint32, signedSorobanEnvelope } from "./envelope";
 import { ContractError, HostError, MissingSignerError, TxError, parseHostError } from "./errors";
 import { withAccountLock } from "./lock";
 import { getRpc, rpcCall, sleep } from "./rpc";
@@ -135,13 +137,31 @@ async function buildSignSubmit<T>(p: InvokeParams<T>): Promise<InvokeResult<T>> 
     sim = await simulate(tx, p.fn, p.contractId);
   }
 
-  const prepared = rpc.assembleTransaction(tx, sim).build();
-  prepared.sign(p.source);
-  return submitAndPoll(prepared, p.fn, p.decode);
+  const data = sim.transactionData.build();
+  if (feeFitsUint32(data, BigInt(INCLUSION_FEE))) {
+    const prepared = rpc.assembleTransaction(tx, sim).build();
+    prepared.sign(p.source);
+    return submitAndPoll(prepared, p.fn, p.decode);
+  }
+  // The resource fee exceeds the uint32 transaction fee (e.g. the call extends the TTL of a
+  // contract's code on today's testnet): same transaction, wrapped in a fee bump.
+  const invoke = tx.operations[0] as Operation.InvokeHostFunction;
+  const auth = invoke.auth?.length ? invoke.auth : (sim.result?.auth ?? []);
+  console.warn(`[stellar] ${p.fn}: resource fee ${data.resourceFee} stroops exceeds the uint32 fee cap; fee-bumping`);
+  const bumped = signedSorobanEnvelope({
+    source: p.source,
+    sequence,
+    op: Operation.invokeHostFunction({ func: invoke.func, auth }),
+    data,
+    inclusionFee: BigInt(INCLUSION_FEE),
+    networkPassphrase,
+    timeoutSecs: TX_TIMEOUT_SECS,
+  });
+  return submitAndPoll(bumped, p.fn, p.decode);
 }
 
 /** Sends a signed transaction and polls until it is final. Exported for other signed flows (e.g. sponsor-sourced agent txs). */
-export async function submitAndPoll<T>(tx: Transaction, fn: string, decode?: (retval: xdr.ScVal) => T): Promise<InvokeResult<T>> {
+export async function submitAndPoll<T>(tx: Transaction | FeeBumpTransaction, fn: string, decode?: (retval: xdr.ScVal) => T): Promise<InvokeResult<T>> {
   const server = getRpc();
   const started = Date.now();
   let sent: rpc.Api.SendTransactionResponse | undefined;

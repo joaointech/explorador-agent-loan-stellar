@@ -207,11 +207,17 @@ export async function extractCpcvFromPdf(pdf: Uint8Array, opts: ExtractOptions =
   }
   const parsed = response.parsed_output;
   if (!parsed?.ok) {
-    console.warn(`[admin] CPCV reading did not match the schema (${response.model}, stop ${response.stop_reason}): ${parsed ? parsed.error.slice(0, 300) : "no text block"}`);
+    // Not the parse error itself: it can quote the reply, i.e. personal data.
+    console.warn(`[admin] CPCV reading did not match the schema (${response.model}, stop ${response.stop_reason}, ${parsed ? "invalid reply" : "no text block"})`);
     return fail("AI_BAD_OUTPUT", `Claude's reading wasn't in the expected format. The PDF is stored; ${MANUAL}.`);
   }
   console.info(`[admin] CPCV read by ${response.model}: ${response.usage.input_tokens} input / ${response.usage.output_tokens} output tokens`);
-  return { ok: true, extraction: normalizeExtraction(parsed.data, response.model) };
+  try {
+    return { ok: true, extraction: normalizeExtraction(parsed.data, response.model) };
+  } catch (err) {
+    console.error(`[admin] could not check the CPCV reading: ${err instanceof Error ? err.name : typeof err}`);
+    return fail("AI_BAD_OUTPUT", `Claude's reading couldn't be used. The PDF is stored; ${MANUAL}.`);
+  }
 }
 
 /** Typed SDK errors → outcome (most specific first; never string matching). */

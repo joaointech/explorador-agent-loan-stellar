@@ -8,6 +8,8 @@ import { decryptCpcvPii, type CpcvPii } from "./pii";
 
 export const cpcvWithAgent = {
   agent: { select: { userId: true, smartAccount: true, user: { select: { email: true, displayName: true } } } },
+  // Metadata of the signed PDF only: the (encrypted) content is read by GET /api/admin/cpcv/[id]/document.
+  document: { select: { fileName: true, sizeBytes: true, createdAt: true } },
 } satisfies Prisma.CpcvInclude;
 
 export type CpcvWithAgent = Prisma.CpcvGetPayload<{ include: typeof cpcvWithAgent }>;
@@ -55,5 +57,6 @@ export function toAdminCpcvRow(row: CpcvWithAgent, protocolDay: number | null, p
     createdAt: row.createdAt.toISOString(),
     overdue: isOverdue(row.status, row.escrituraDay, protocolDay),
     ...(pii ? {} : { piiUnavailable: true }),
+    document: row.document ? { fileName: row.document.fileName, sizeBytes: row.document.sizeBytes, uploadedAt: row.document.createdAt.toISOString() } : null,
   };
 }

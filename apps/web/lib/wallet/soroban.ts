@@ -179,11 +179,28 @@ export async function invokeContract(p: InvokeParams): Promise<InvokeOutcome> {
   }
 
   p.onPhase?.("submitting");
-  const txHash = await submit(p.rpc, signed, sleep);
+  const intervalMs = p.pollIntervalMs ?? POLL_INTERVAL_MS;
+  let txHash: string;
+  try {
+    txHash = await submit(p.rpc, signed, sleep);
+  } catch (err) {
+    // The request failed, but the network may still have accepted the transaction:
+    // look for it by its hash before reporting a failure (a retry would then be a duplicate).
+    if (!(err instanceof WalletError && err.code === "NETWORK")) throw err;
+    const localHash = toHex(signed.hash());
+    try {
+      return await poll(p.rpc, localHash, sleep, intervalMs, 3 * intervalMs);
+    } catch (pollErr) {
+      if (pollErr instanceof WalletError && pollErr.code !== "TX_TIMEOUT") throw pollErr;
+      throw err;
+    }
+  }
 
   p.onPhase?.("confirming", { txHash });
-  return poll(p.rpc, txHash, sleep, p.pollIntervalMs ?? POLL_INTERVAL_MS, p.pollTimeoutMs ?? POLL_TIMEOUT_MS);
+  return poll(p.rpc, txHash, sleep, intervalMs, p.pollTimeoutMs ?? POLL_TIMEOUT_MS);
 }
+
+const toHex = (bytes: Uint8Array): string => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
 async function submit(rpc: Pick<RpcLike, "sendTransaction">, tx: Transaction, sleep: (ms: number) => Promise<void>): Promise<string> {
   let sent: Api.SendTransactionResponse;
@@ -214,7 +231,9 @@ async function poll(
   intervalMs: number,
   timeoutMs: number,
 ): Promise<InvokeOutcome> {
+  // Bounded both by attempts and by wall-clock time (a hanging RPC request can take its full timeout).
   const attempts = Math.max(1, Math.ceil(timeoutMs / intervalMs));
+  const deadline = Date.now() + timeoutMs;
   for (let i = 0; i < attempts; i++) {
     let res: Api.GetTransactionResponse | undefined;
     try {
@@ -226,7 +245,8 @@ async function poll(
       return { txHash, ledger: res.ledger, returnValue: res.returnValue ?? xdr.ScVal.scvVoid() };
     }
     if (res?.status === Api.GetTransactionStatus.FAILED) throw failedTransaction(res, txHash);
-    if (i < attempts - 1) await sleep(intervalMs);
+    if (i === attempts - 1 || Date.now() >= deadline) break;
+    await sleep(intervalMs);
   }
   throw new WalletError("TX_TIMEOUT", `Not confirmed after ${Math.round(timeoutMs / 1000)} s. Check the transaction on stellar.expert.`, { txHash });
 }

@@ -230,6 +230,38 @@ describe("invokeContract", () => {
     expect(rpc.getTransaction).toHaveBeenCalledTimes(5);
   });
 
+  it("looks the transaction up by its hash when the submission request itself fails", async () => {
+    wireHappyPath(rpc);
+    rpc.sendTransaction.mockRejectedValue(new TypeError("Failed to fetch"));
+    rpc.getTransaction.mockResolvedValue({ status: Api.GetTransactionStatus.SUCCESS, ledger: 1_003, returnValue: i128(7n) });
+    const out = await invoke();
+    const signed = rpc.sendTransaction.mock.calls[0][0] as Transaction;
+    expect(out).toMatchObject({ txHash: txHash(signed), ledger: 1_003 });
+    expect(rpc.getTransaction).toHaveBeenCalledWith(txHash(signed));
+  });
+
+  it("reports the network error when a failed submission never shows up", async () => {
+    wireHappyPath(rpc);
+    rpc.sendTransaction.mockRejectedValue(new TypeError("Failed to fetch"));
+    rpc.getTransaction.mockResolvedValue({ status: Api.GetTransactionStatus.NOT_FOUND });
+    await expect(invoke()).rejects.toMatchObject({ code: "NETWORK" });
+    expect(rpc.getTransaction).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops polling at the deadline even when requests hang", async () => {
+    wireHappyPath(rpc);
+    let now = 0;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    rpc.getTransaction.mockImplementation(async () => {
+      now += 20_000; // each request takes the RPC client's full timeout
+      return { status: Api.GetTransactionStatus.NOT_FOUND };
+    });
+    const err = await invoke({ pollIntervalMs: 1_000, pollTimeoutMs: 60_000 }).catch((e) => e);
+    clock.mockRestore();
+    expect(err).toMatchObject({ code: "TX_TIMEOUT" });
+    expect(rpc.getTransaction).toHaveBeenCalledTimes(3);
+  });
+
   it("keeps polling through transient RPC errors", async () => {
     wireHappyPath(rpc);
     rpc.getTransaction

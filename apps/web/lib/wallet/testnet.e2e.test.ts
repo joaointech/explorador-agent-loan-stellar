@@ -1,6 +1,6 @@
 // The investor flow against the real testnet deployment, with a throwaway
 // keypair standing in for Freighter: Friendbot → teurc.faucet → deposit →
-// withdraw → redeem everything. Skipped unless INVEST_E2E_APP_URL points at a
+// withdraw → "Max" (redeem everything). Skipped unless INVEST_E2E_APP_URL points at a
 // running app (its GET /api/config names the contracts):
 //
 //   INVEST_E2E_APP_URL=http://localhost:3000 pnpm --filter web exec vitest run lib/wallet/testnet.e2e
@@ -14,7 +14,7 @@ import type { ConfigResponse, DeploymentInfo } from "../types/api";
 import { STROOPS_PER_EUR } from "../units";
 import { FAUCET_AMOUNT } from "./constants";
 import { fundWithFriendbot, getTestEurc } from "./faucet";
-import { deposit, previewDeposit, previewWithdraw, readLivePosition, redeem, withdraw, type PoolSigner } from "./pool";
+import { deposit, previewDeposit, previewWithdraw, readLivePosition, withdraw, withdrawMax, type PoolSigner } from "./pool";
 import { getRpc } from "./soroban";
 import { keypairSigner } from "./testing/mock-rpc";
 
@@ -67,7 +67,9 @@ describe.skipIf(!APP_URL)("investor flow on testnet", () => {
       live = await readLivePosition(signer, me);
       expect(live.teurc).toBe(FAUCET_AMOUNT - 60n * EUR);
 
-      const out = await redeem(signer, live.maxRedeem);
+      // "Max": liquidity allows a full exit here, so every share is redeemed.
+      const out = await withdrawMax(signer, EUR);
+      expect(out.shares).toBe(live.shares);
       expect(out.assets > 59n * EUR).toBe(true);
       live = await readLivePosition(signer, me);
       expect(live.shares).toBe(0n);

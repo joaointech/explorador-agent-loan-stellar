@@ -103,9 +103,9 @@ describe("createFreighterStore", () => {
     expect(store.getState()).toMatchObject({ status: "disconnected", error: "You rejected the request in Freighter." });
   });
 
-  it("lets a disconnect win over a connection that resolves later", async () => {
+  it("lets a disconnect win over a connection that resolves later, preference included", async () => {
     let resolveConnect: (s: FreighterSession) => void = () => {};
-    const { store, listener } = setup({ connect: vi.fn(() => new Promise<FreighterSession>((r) => (resolveConnect = r))) });
+    const { store, deps, listener } = setup({ connect: vi.fn(() => new Promise<FreighterSession>((r) => (resolveConnect = r))) });
     store.subscribe(listener);
     await flush();
     const pending = store.connect();
@@ -114,6 +114,8 @@ describe("createFreighterStore", () => {
     resolveConnect(session());
     await pending;
     expect(store.getState().status).toBe("disconnected");
+    expect(deps.writePreference).toHaveBeenLastCalledWith("disconnected");
+    expect(deps.writePreference).not.toHaveBeenCalledWith("connected");
   });
 
   it("stops watching when the last subscriber leaves", async () => {

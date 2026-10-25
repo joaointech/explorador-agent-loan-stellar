@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import { TESTNET_PASSPHRASE } from "./constants";
 
@@ -111,20 +111,59 @@ describe("freighterSigner", () => {
 });
 
 describe("watchFreighter", () => {
-  it("reports account and network switches, and a lost session after two empty replies", () => {
+  const MAINNET = "Public Global Stellar Network ; September 2015";
+  const EMPTY = { address: "", network: "", networkPassphrase: "" };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reports account and network switches", () => {
     const onChange = vi.fn();
-    const stop = watchFreighter(onChange, 1_000);
+    watchFreighter(onChange, 1_000);
     const { cb, timeout } = api.watchers[0];
     expect(timeout).toBe(1_000);
-    cb!({ address: ADDRESS, network: "PUBLIC", networkPassphrase: "Public Global Stellar Network ; September 2015" });
-    expect(onChange).toHaveBeenLastCalledWith({ address: ADDRESS, network: { network: "PUBLIC", passphrase: "Public Global Stellar Network ; September 2015" } });
-    cb!({ address: "", network: "", networkPassphrase: "" });
-    expect(onChange).toHaveBeenCalledTimes(1);
-    cb!({ address: "", network: "", networkPassphrase: "" });
-    expect(onChange).toHaveBeenLastCalledWith(null);
-    cb!({ address: "", network: "", networkPassphrase: "", error: { code: -1, message: "x" } });
-    expect(onChange).toHaveBeenCalledTimes(2);
+    cb!({ address: ADDRESS, network: "PUBLIC", networkPassphrase: MAINNET });
+    expect(onChange).toHaveBeenLastCalledWith({ address: ADDRESS, network: { network: "PUBLIC", passphrase: MAINNET } });
+  });
+
+  it("drops the session once getAddress confirms the empty report (the watcher reports a change only once)", async () => {
+    api.getAddress.mockResolvedValue({ address: "" });
+    const onChange = vi.fn();
+    watchFreighter(onChange, 1_000, 1_500);
+    api.watchers[0].cb!(EMPTY);
+    expect(onChange).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(api.getAddress).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it("keeps the session when the confirmation finds the address (a slow reply)", async () => {
+    api.getAddress.mockResolvedValue({ address: ADDRESS });
+    const onChange = vi.fn();
+    watchFreighter(onChange, 1_000, 1_500);
+    api.watchers[0].cb!(EMPTY);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("ignores errors, superseded reports and anything after stop", async () => {
+    api.getAddress.mockResolvedValue({ address: "" });
+    const onChange = vi.fn();
+    const stop = watchFreighter(onChange, 1_000, 1_500);
+    const { cb } = api.watchers[0];
+    cb!({ ...EMPTY, error: { code: -1, message: "x" } });
+    cb!(EMPTY);
+    cb!({ address: ADDRESS, network: "TESTNET", networkPassphrase: TESTNET_PASSPHRASE }); // came back before the check
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(onChange).not.toHaveBeenCalledWith(null);
+    cb!(EMPTY);
     stop();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(onChange).not.toHaveBeenCalledWith(null);
     expect(api.watchers[0].stop).toHaveBeenCalled();
   });
 });

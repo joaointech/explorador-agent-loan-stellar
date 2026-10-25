@@ -83,24 +83,37 @@ export const freighterSigner: SignTransaction = async (txXdr, { networkPassphras
 
 /**
  * Calls `onChange` when the account or network selected in Freighter
- * changes (polled every `intervalMs`), with null once Freighter stops sharing
- * an address (locked, or access revoked): two empty reports in a row, since
- * a single slow reply also comes back empty. Returns a stop function.
+ * changes (polled every `intervalMs`), and with null once Freighter stops
+ * sharing an address (locked, access revoked, or an account this site isn't
+ * allowed for). Freighter's watcher reports a change only once, and a slow
+ * reply also comes back empty, so an empty address is confirmed with a direct
+ * `getAddress()` after `confirmMs` before the session is dropped. Returns a
+ * stop function.
  */
-export function watchFreighter(onChange: (session: FreighterSession | null) => void, intervalMs = 3_000): () => void {
+export function watchFreighter(onChange: (session: FreighterSession | null) => void, intervalMs = 3_000, confirmMs = 1_500): () => void {
   const watcher = new WatchWalletChanges(intervalMs);
-  let empty = 0;
+  let stopped = false;
+  let latest = 0;
   watcher.watch(({ address, network, networkPassphrase, error }) => {
-    if (error) return;
-    if (!address) {
-      empty += 1;
-      if (empty >= 2) onChange(null);
+    if (error || stopped) return;
+    const report = ++latest;
+    if (address) {
+      onChange({ address, network: { network, passphrase: networkPassphrase } });
       return;
     }
-    empty = 0;
-    onChange({ address, network: { network, passphrase: networkPassphrase } });
+    setTimeout(() => {
+      void getAddress()
+        .catch(() => ({ address: "" }))
+        .then((res) => {
+          // Ignore if stopped, or if a newer report (e.g. the address came back) arrived meanwhile.
+          if (!stopped && report === latest && !res.address) onChange(null);
+        });
+    }, confirmMs);
   });
-  return () => watcher.stop();
+  return () => {
+    stopped = true;
+    watcher.stop();
+  };
 }
 
 const NETWORK_NAMES: Record<string, string> = {

@@ -6,6 +6,8 @@
 import type { xdr } from "@stellar/stellar-sdk/base";
 
 import type { DeploymentInfo } from "../types/api";
+import { BPS, STROOPS_PER_CENT, YEAR_SECS } from "../units";
+import { WalletError, contractError } from "./errors";
 import {
   address,
   i128,
@@ -164,6 +166,32 @@ export async function withdraw(s: PoolSigner, assets: bigint): Promise<VaultTxRe
 export async function redeem(s: PoolSigner, shares: bigint): Promise<VaultTxResult> {
   const out = await invoke(s, "advancePool", "redeem", redeemArgs(shares, s.source, s.source, s.source));
   return { txHash: out.txHash, ledger: out.ledger, shares, assets: toBigInt(out.returnValue, "redeem") };
+}
+
+/**
+ * Slack for a withdrawal capped by the pool's liquidity: between our read and
+ * the transaction executing (Freighter prompt included), accruing protocol
+ * fees shrink `lendable` (pool cash − fees). Fees accrued over `secs` at the
+ * current debt, plus a cent of rounding.
+ */
+export function liquiditySlack(totalDebt: bigint, params: { agentAprBps: number; protocolFeeBps: number }, secs = 600): bigint {
+  const fees = (totalDebt * BigInt(params.agentAprBps) * BigInt(params.protocolFeeBps) * BigInt(secs)) / (BPS * BPS * BigInt(YEAR_SECS));
+  return fees + 1n + STROOPS_PER_CENT;
+}
+
+/**
+ * "Withdraw everything available", from a fresh read: when liquidity allows a
+ * full exit, `redeem` every share (exact, no dust); when it doesn't,
+ * `withdraw(max_withdraw − slack)`, since `max_redeem` has no headroom and
+ * accrual between the read and execution would make it fail.
+ */
+export async function withdrawMax(s: PoolSigner, slack: bigint): Promise<VaultTxResult> {
+  const [shares, maxRedeem, maxWithdraw] = await Promise.all([readShareBalance(s, s.source), readMaxRedeem(s, s.source), readMaxWithdraw(s, s.source)]);
+  if (shares <= 0n) throw new WalletError("WALLET_ERROR", "You have no eaSR shares to withdraw.");
+  if (maxRedeem >= shares) return redeem(s, shares);
+  const assets = maxWithdraw - slack;
+  if (assets <= 0n) throw contractError(5);
+  return withdraw(s, assets);
 }
 
 /** `teurc.faucet(investor, amount)`: open to anyone on testnet, ≤ 25,000 tEURC per call. */

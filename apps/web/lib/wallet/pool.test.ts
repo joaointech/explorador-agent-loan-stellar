@@ -8,6 +8,7 @@ import {
   depositArgs,
   faucet,
   faucetArgs,
+  liquiditySlack,
   previewDeposit,
   previewRedeem,
   previewWithdraw,
@@ -20,6 +21,7 @@ import {
   redeemArgs,
   withdraw,
   withdrawArgs,
+  withdrawMax,
   type PoolClient,
   type PoolSigner,
 } from "./pool";
@@ -152,6 +154,45 @@ describe("writes", () => {
     expect(res).toMatchObject({ shares: 1_000_000_000n, assets: 1_052_631_578n });
     expect(sent().method).toBe("redeem");
     expect(natives(sent().args)).toEqual([1_000_000_000n, ME, ME, ME]);
+  });
+
+  describe("withdrawMax", () => {
+    function wireReads(values: { balance: bigint; max_redeem: bigint; max_withdraw: bigint }, returnValue: bigint) {
+      wireHappyPath(rpc, { returnValue: i128(returnValue) });
+      rpc.simulateTransaction.mockImplementation(async (tx: Transaction) => {
+        const { method } = invocationOf(tx);
+        return simOk(i128(method in values ? values[method as keyof typeof values] : returnValue));
+      });
+    }
+
+    it("redeems every share when liquidity allows a full exit (exact, no dust)", async () => {
+      wireReads({ balance: 1_000_000_000n, max_redeem: 1_000_000_000n, max_withdraw: 1_052_000_000n }, 1_052_000_000n);
+      const res = await withdrawMax(signer, 328_311n);
+      expect(sent().method).toBe("redeem");
+      expect(natives(sent().args)).toEqual([1_000_000_000n, ME, ME, ME]);
+      expect(res).toMatchObject({ shares: 1_000_000_000n, assets: 1_052_000_000n });
+    });
+
+    it("withdraws max_withdraw minus the slack when liquidity caps the exit", async () => {
+      wireReads({ balance: 1_000_000_000n, max_redeem: 400_000_000n, max_withdraw: 420_000_000n }, 399_000_000n);
+      await withdrawMax(signer, 328_311n);
+      expect(sent().method).toBe("withdraw");
+      expect(natives(sent().args)).toEqual([420_000_000n - 328_311n, ME, ME, ME]);
+    });
+
+    it("refuses when there is nothing to withdraw", async () => {
+      wireReads({ balance: 1_000_000_000n, max_redeem: 0n, max_withdraw: 200_000n }, 0n);
+      await expect(withdrawMax(signer, 328_311n)).rejects.toMatchObject({ code: "CONTRACT_ERROR", contractCode: 5 });
+      wireReads({ balance: 0n, max_redeem: 0n, max_withdraw: 0n }, 0n);
+      await expect(withdrawMax(signer, 328_311n)).rejects.toMatchObject({ code: "WALLET_ERROR" });
+      expect(rpc.sendTransaction).not.toHaveBeenCalled();
+    });
+  });
+
+  it("sizes the liquidity slack as ten minutes of protocol fees plus a cent", () => {
+    // €100,000 debt × 12% × 10% = €1,200 of fees a year → €0.0228 per 10 minutes.
+    expect(liquiditySlack(1_000_000_000_000n, { agentAprBps: 1200, protocolFeeBps: 1000 })).toBe(228_310n + 1n + 100_000n);
+    expect(liquiditySlack(0n, { agentAprBps: 1200, protocolFeeBps: 1000 })).toBe(100_001n);
   });
 
   it("calls teurc.faucet for the investor", async () => {

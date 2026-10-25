@@ -110,8 +110,10 @@ export function createFreighterStore(deps: FreighterDeps): FreighterStore {
     try {
       if (!(await deps.detect())) return apply(idle("unavailable"));
       const session = await deps.connect();
+      // A disconnect (or another connect) since then wins, including the remembered preference.
+      if (run !== generation) return;
       deps.writePreference("connected");
-      apply(connectedState(session));
+      set(connectedState(session));
     } catch (err) {
       apply(idle("disconnected", toWalletError(err).message));
     }

@@ -6,17 +6,19 @@ import { describe, expect, it } from "vitest";
 
 import { ToastProvider } from "@/components/ui/toast";
 
+import type { AgentOverviewResponse } from "@/lib/types/api";
+
 import { AgentDashboard } from "./agent-dashboard";
 import { AgentAppProvider } from "./context";
 import { AGENT_FIXTURES, type AgentFixtureName } from "./fixtures";
 import { createPreviewApi } from "./preview-api";
 
-function render(name: AgentFixtureName, opts: { preview?: boolean } = {}): string {
-  const data = AGENT_FIXTURES[name];
+function render(fixture: AgentFixtureName | AgentOverviewResponse, opts: { preview?: boolean; error?: string } = {}): string {
+  const data = typeof fixture === "string" ? AGENT_FIXTURES[fixture] : fixture;
   const html = renderToStaticMarkup(
     <ToastProvider>
       <AgentAppProvider value={{ api: createPreviewApi(() => data), refresh: async () => {}, preview: opts.preview ?? false }}>
-        <AgentDashboard data={data} status={{ error: null, refreshing: false }} />
+        <AgentDashboard data={data} status={{ error: opts.error ?? null, refreshing: false }} />
       </AgentAppProvider>
     </ToastProvider>,
   );
@@ -137,6 +139,19 @@ describe("agent app states (server render)", () => {
     expect(text).toContain("Last known");
     expect(text).toContain("Showing your last known balances");
     expect(text).toContain("these are from 11:58");
+  });
+
+  it("no position at all (Stellar unreachable, nothing cached): unknowns, not zeros", () => {
+    const text = render({ ...AGENT_FIXTURES.activeWithDeals, position: null, positionSource: "none", pendingHolds: "0" });
+    expect(text).toContain("Connecting");
+    expect(text).toContain("Waiting for Stellar");
+    expect(text).toContain("Used —");
+    expect(text).toContain("Your balances are loading from Stellar.");
+    expect(text).not.toContain("Credit used");
+  });
+
+  it("a failed refresh keeps the data and says so", () => {
+    expect(render("activeWithDeals", { error: "Network error" })).toContain("Can't refresh");
   });
 
   it("renders the same in the preview gallery (inert passkey actions)", () => {

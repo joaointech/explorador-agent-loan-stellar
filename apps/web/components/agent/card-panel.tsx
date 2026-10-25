@@ -152,7 +152,7 @@ export function CardPanel({ data }: { data: Overview }) {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Button
           variant="secondary"
-          size="sm"
+          size="md"
           loading={loading}
           icon={details ? <EyeOff aria-hidden className="size-4" /> : <Eye aria-hidden className="size-4" />}
           onClick={() => (details ? setDetails(null) : void reveal())}
@@ -160,7 +160,7 @@ export function CardPanel({ data }: { data: Overview }) {
         >
           {details ? "Hide details" : "Reveal details"}
         </Button>
-        {details && <CopyButton value={details.pan} label="Copy card number" className="size-9 rounded-xl ring-1 ring-line" />}
+        {details && <CopyButton value={details.pan} label="Copy card number" className="size-11 rounded-xl ring-1 ring-line" />}
         <span className="text-xs text-muted">{details ? "Test card details · hidden again in a minute" : "Sandbox test card · no real money"}</span>
       </div>
       {error && (

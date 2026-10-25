@@ -37,7 +37,7 @@ function LiveStatus({ data, status }: { data: Overview; status: RefreshStatus })
       <Badge tone={badge.tone} dot pulse={badge.pulse} title={badge.title}>
         {badge.label}
       </Badge>
-      <IconButton label="Refresh now" size="sm" onClick={() => void refresh()} disabled={status.refreshing}>
+      <IconButton label="Refresh now" onClick={() => void refresh()} disabled={status.refreshing}>
         <RefreshCw aria-hidden className={cn("size-4", status.refreshing && "animate-spin")} />
       </IconButton>
     </div>

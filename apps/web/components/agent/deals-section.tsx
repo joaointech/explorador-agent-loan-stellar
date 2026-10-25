@@ -27,7 +27,8 @@ function Item({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function DealCard({ deal, used, rates }: { deal: AgentDeal; used: bigint; rates: Rates }) {
+/** `used` is null while the position is unknown (Stellar unreachable and nothing cached). */
+function DealCard({ deal, used, rates }: { deal: AgentDeal; used: bigint | null; rates: Rates }) {
   const active = deal.status === "MINTED";
   const limit = BigInt(deal.creditLimit);
   return (
@@ -65,7 +66,7 @@ function DealCard({ deal, used, rates }: { deal: AgentDeal; used: bigint; rates:
         </Item>
       </dl>
 
-      {active && limit > 0n && (
+      {active && used !== null && limit > 0n && (
         <ProgressBar
           className="mt-4"
           size="sm"
@@ -131,7 +132,12 @@ export function DealsSection({ data }: { data: Overview }) {
       ) : (
         <ul className="mt-4 grid gap-3 md:grid-cols-2">
           {data.deals.map((deal) => (
-            <DealCard key={deal.cpcvId} deal={deal} rates={data.rates} used={(deal.noteId !== null ? usedByNote.get(deal.noteId) : undefined) ?? BigInt(deal.used)} />
+            <DealCard
+              key={deal.cpcvId}
+              deal={deal}
+              rates={data.rates}
+              used={data.position === null ? null : ((deal.noteId !== null ? usedByNote.get(deal.noteId) : undefined) ?? BigInt(deal.used))}
+            />
           ))}
         </ul>
       )}

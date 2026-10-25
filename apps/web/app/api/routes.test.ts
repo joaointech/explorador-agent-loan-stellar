@@ -1,9 +1,11 @@
 // Route handlers against a mocked chain layer and an in-memory database:
 // every response is checked against a strict schema mirroring lib/types/api.ts.
 
+import { StrKey } from "@stellar/stellar-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { resetRateLimits } from "@/lib/auth/rate-limit";
 import { decodeEvent } from "@/lib/indexer/events";
 import { BASE_CLOSE, BASE_LEDGER, ev } from "@/lib/indexer/fixtures";
 import { decodeNote, decodePoolStats } from "@/lib/stellar/decode";
@@ -539,6 +541,25 @@ describe("POST /api/faucet/teurc", () => {
   it("validates the body", async () => {
     expect((await body(await faucetPOST(post({ address: "GABC" })), error, 400)).error.code).toBe("VALIDATION_ERROR");
     expect(chain.faucet).not.toHaveBeenCalled();
+  });
+  it("limits fresh addresses per client IP and per instance, so a flood can't queue the operator", async () => {
+    resetRateLimits();
+    const fresh = (i: number) => StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 100 + i));
+    const from = (ip: string, address: string) =>
+      new Request("http://localhost:3105/api/faucet/teurc", { method: "POST", headers: { "x-forwarded-for": ip }, body: JSON.stringify({ address }) });
+    try {
+      // One IP rotating addresses: 5 grants per 10 minutes.
+      for (let i = 0; i < 5; i++) await body(await faucetPOST(from("203.0.113.1", fresh(i))), schemas.tx);
+      expect((await body(await faucetPOST(from("203.0.113.1", fresh(5))), error, 429)).error.code).toBe("RATE_LIMITED");
+      expect(chain.faucet).toHaveBeenCalledTimes(5);
+
+      // Many IPs: at most 20 grants per minute per instance in total.
+      for (let i = 0; i < 15; i++) await body(await faucetPOST(from(`198.51.100.${i}`, fresh(10 + i))), schemas.tx);
+      expect((await body(await faucetPOST(from("198.51.100.200", fresh(40))), error, 429)).error.code).toBe("RATE_LIMITED");
+      expect(chain.faucet).toHaveBeenCalledTimes(20);
+    } finally {
+      resetRateLimits();
+    }
   });
 });
 

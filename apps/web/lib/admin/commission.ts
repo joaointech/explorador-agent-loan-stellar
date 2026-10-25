@@ -21,6 +21,9 @@ export interface CommissionPreview {
   creditLimit: bigint;
 }
 
+/** Credit limit of a note from its agent commission in stroops (advance_pool.open_line). */
+export const creditLimitOf = (agentCommission: bigint): bigint => (agentCommission * BigInt(PARAMS.ltvBps)) / BPS;
+
 export function previewCommission(salePriceCents: bigint | number, commissionRateBps: number): CommissionPreview {
   const totalCents = totalCommissionCents(BigInt(salePriceCents), commissionRateBps);
   const { agent: agentCents, explorador: exploradorCents } = splitCommission(totalCents);
@@ -32,7 +35,7 @@ export function previewCommission(salePriceCents: bigint | number, commissionRat
     total: centsToStroops(totalCents),
     agent,
     explorador: centsToStroops(exploradorCents),
-    creditLimit: (agent * BigInt(PARAMS.ltvBps)) / BPS,
+    creditLimit: creditLimitOf(agent),
   };
 }
 

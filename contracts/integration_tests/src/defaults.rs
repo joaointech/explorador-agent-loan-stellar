@@ -2,9 +2,10 @@
 //! line debt to the agent's carried debt with a 180-day grace deadline,
 //! interest keeps running, and after the deadline the write-off takes the
 //! loss from junior first (then senior) and blocks the agent. The note stays
-//! Cancelled in the public registry.
+//! Cancelled in the public registry. Also: a settlement shortfall becoming
+//! carried debt that is written off the same way.
 
-use advance_pool::{DebtWrittenOff, LineStatus, NoteCancelled, PoolStats};
+use advance_pool::{DebtWrittenOff, LineStatus, NoteCancelled, NoteSettled, PoolStats};
 use advance_shared::{Error, NoteStatus};
 use cpcv_note::NoteStatusChanged;
 use soroban_sdk::{Address, Event as _};
@@ -214,5 +215,71 @@ e2e! {
         }
         assert_eq!(ctx.try_draw(&a, EUR), Error::AgentBlocked);
         assert_eq!(ctx.try_draw(&b, EUR), Error::AgentBlocked);
+    }
+}
+
+e2e! {
+    /// An escritura years late (the app shows "Overdue"; there is no maximum
+    /// term): the debt outgrew the agent's half, so the settlement repays
+    /// what the half covers, interest first, and the shortfall becomes
+    /// carried debt with a grace period. The note is Settled; the shortfall
+    /// is written off after the grace period.
+    fn a_years_late_escritura_settles_short_and_the_rest_is_written_off(code: Code) {
+        let ctx = Ctx::deploy(code);
+        let a = ctx.agent(0);
+        ctx.mint(0);
+        ctx.enable_card(&a);
+        ctx.draw(&a, 3_750 * EUR); // the whole €3,750 line
+
+        // Six 400-day fast-forwards (each books the previous interval):
+        // 3,750 × (1 + 12% × 400/365)^6 ≈ €7,880 > the €7,500 half.
+        let mut index = SCALE;
+        for _ in 0..6 {
+            ctx.advance_days(400);
+            index = accrue_index(index, 400);
+        }
+        let debt = mul_div_ceil(3_750 * EUR, index, SCALE);
+        assert_eq!(ctx.pool.line(&1).debt, debt);
+        let half = 7_500 * EUR;
+        assert!(debt > half);
+
+        let settle = ctx.settle(1);
+        let interest = debt - 3_750 * EUR;
+        assert_eq!(
+            ctx.emitted(&settle.events, &ctx.pool.address),
+            [NoteSettled {
+                note_id: 1,
+                agent: a.clone(),
+                total_commission: 15_000 * EUR,
+                debt_repaid: half,
+                interest_paid: interest,
+                carried_repaid: 0,
+                agent_payout: 0,
+                junior_deposit: half,
+            }
+            .to_xdr(&ctx.env, &ctx.pool.address)]
+        );
+        assert_eq!(ctx.notes.get(&1).status, NoteStatus::Settled);
+        assert_eq!(ctx.pool.line(&1).line.status, LineStatus::Settled);
+        // The half paid the interest first; the unpaid rest is principal.
+        // The scaled debt removed rounds down (never clears more than paid).
+        let carried_scaled = 3_750 * EUR - half * SCALE / index;
+        let position = ctx.position(&a);
+        assert_eq!(position.card_balance, 0);
+        assert!(position.lines.is_empty());
+        assert_eq!(position.total_principal, 3_750 * EUR - (half - interest));
+        assert_eq!(
+            position.carried_debt,
+            mul_div_ceil(carried_scaled, index, SCALE)
+        );
+        let deadline = ctx.pool.protocol_now() + 180 * DAY;
+        assert_eq!(position.grace_deadline, Some(deadline));
+
+        ctx.advance_days(180);
+        assert_eq!(ctx.pool.protocol_now(), deadline);
+        ctx.step(|| ctx.pool.accrue());
+        write_off_and_check(&ctx, &a);
+        assert_eq!(ctx.notes.get(&1).status, NoteStatus::Settled);
+        assert_eq!(ctx.try_draw(&a, EUR), Error::AgentBlocked);
     }
 }

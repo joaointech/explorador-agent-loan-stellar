@@ -64,7 +64,9 @@ export function SettingsSection({ data }: { data: Overview }) {
           action={
             data.onboarding.smartAccount ? (
               <>
-                <CreatePasskeyAction variant="secondary">Add a passkey on this device</CreatePasskeyAction>
+                <CreatePasskeyAction variant="secondary" additional>
+                  Add a passkey on this device
+                </CreatePasskeyAction>
                 <p className="mt-1.5 text-xs leading-relaxed text-muted">Extra passkeys can sign in. Card actions stay with the passkey that created your account.</p>
               </>
             ) : undefined

@@ -69,8 +69,11 @@ function provisioningToast(toast: ReturnType<typeof useToast>, p: AgentProvision
   if (p?.status === "complete") toast.success("Your account and card are ready", { description: "Last step: activate your card." });
 }
 
-/** Onboarding: creates the passkey; the server deploys the smart account and issues the card. */
-export function CreatePasskeyAction({ variant = "primary", icon, children }: ActionStyle) {
+/**
+ * Creates a passkey. Onboarding: the server then deploys the smart account and issues the card.
+ * Settings (`additional`): an extra passkey for signing in; the account and card already exist.
+ */
+export function CreatePasskeyAction({ variant = "primary", icon, children, additional = false }: ActionStyle & { additional?: boolean }) {
   const { preview, refresh } = useAgentApp();
   const toast = useToast();
   if (preview) return <PreviewOnlyButton variant={variant} icon={icon}>{children}</PreviewOnlyButton>;
@@ -78,7 +81,8 @@ export function CreatePasskeyAction({ variant = "primary", icon, children }: Act
     <RegisterPasskeyButton
       className={actionClass(variant)}
       onRegistered={(res) => {
-        provisioningToast(toast, res.provisioning);
+        if (additional) toast.success("Passkey added", { description: "You can sign in with it on this device." });
+        else provisioningToast(toast, res.provisioning);
         void refresh();
       }}
     >

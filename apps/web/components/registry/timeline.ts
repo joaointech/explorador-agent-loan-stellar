@@ -133,7 +133,19 @@ export function describeTimelineEvent(event: TimelineEvent, index = 0): Timeline
   }
 }
 
-/** Oldest first, as the API sends them; stable for equal ledgers. */
+/** Within one transaction: the mint reads before the credit line it opened. */
+const SAME_TX_RANK: Record<string, number> = { NoteMinted: 0, LineOpened: 1 };
+const sameTxRank = (type: string) => SAME_TX_RANK[type] ?? 2;
+
+/**
+ * Oldest first, as the API sends them; stable for equal ledgers. cpcv_note.mint
+ * calls advance_pool.open_line before it emits note_minted, so the chain lists
+ * LineOpened first: events of the same transaction are reordered so the note is
+ * minted before its credit line opens.
+ */
 export function describeTimeline(events: readonly TimelineEvent[]): TimelineItem[] {
-  return events.map((e, i) => describeTimelineEvent(e, i));
+  const ordered = events
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => (a.e.txHash === b.e.txHash ? sameTxRank(a.e.type) - sameTxRank(b.e.type) || a.i - b.i : a.i - b.i));
+  return ordered.map(({ e, i }) => describeTimelineEvent(e, i));
 }

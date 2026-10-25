@@ -102,3 +102,4 @@ try {
 } finally {
   await db.$disconnect();
 }
+process.exit(process.exitCode ?? 0);

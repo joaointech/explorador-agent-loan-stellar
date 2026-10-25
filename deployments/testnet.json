@@ -1,14 +1,14 @@
 {
   "network": "testnet",
-  "teurc": "CD2DZTQ5MSOL2KBYFFIUTF473GHEX3IX66ALWWUPC2B435FE3ANLVU3T",
-  "cpcvNote": "CCITJ4VZ5H5MXB4A3WDYE6ZG6MRXAIISRSBXFQH2S6GKD4XAW77DT3MP",
-  "advancePool": "CD3XUBUO44772E63FBNURBVEFDGLURMBOKGV4AZAN4FLO4QAOCGANTIC",
+  "teurc": "CA2EDKOQTKUUEZVP6BNIJXDKSOZPUKMFFS2ZQEOYWULAZNYQU26DFH3P",
+  "cpcvNote": "CD2YFDR2NOBHMS3KD7SDUL7GC6GNTJVN7X5CVIIH2IZ6R2VY62C6AL6E",
+  "advancePool": "CBWGLGI3SP3H75BJDOB4P6RAASPUNN7HR2SKQM4GQRZIQX73YCSGHAZ3",
   "wasmHashes": {
     "teurc": "761716af73b224480a4414e32ac94a883c84e7a6a95291d24c22e83e184772e6",
     "cpcvNote": "a52f94d1370e05a1175eb8cfb1b9b95c7adf65658758ace51402ddd97ae82565",
     "advancePool": "299d6e9f4e6741bb3590013ac4b7a20762779a7a838b02dbeae52d59d6a276e3"
   },
-  "deployedAt": "2026-10-25T16:43:27.991Z",
+  "deployedAt": "2026-10-25T17:08:57.357Z",
   "roles": {
     "admin": "GADMCAK3SSHGRAL7JS3XUQID7UZLAY4A57UR4W5VOY7TKTNARVHB3RWW",
     "operator": "GDLVQ5V5OZ4TGYHJGESUR5X4YAPBILXJSMALA56MILPJYBGS7XRBKQYT",
@@ -18,11 +18,11 @@
   "baseUri": "http://localhost:3112/api/notes",
   "demoMode": true,
   "txs": {
-    "deploy teurc": "c38e1663d59e7ad5f69ae567740ef31478a38f575db29851c210640c87dbc177",
-    "deploy cpcv_note": "bd15aec69fae67d4b318922a2470003ecc91a67fc2c6477679cbb1cce0db386a",
-    "deploy advance_pool": "a3cdee633e366f3663931d7c70a8620d9bf908b8331b4ea8fad019a9ab0ecc25",
-    "cpcv_note.set_pool": "55006c627d6ab286c76799f3fa2c368f74e3ca638211b6fce60584a54b4adb21",
-    "teurc.mint treasury 1,000,000": "e519214426718b3c2df6c2a2db553f4a431429fab6d0da529fa5f01c0d337c9f",
-    "advance_pool.junior_deposit 10,000": "f0e8d482604bc157b413c86771f61f4fae80ff11c6a46c511722133b4e5773e5"
+    "deploy teurc": "107719cab65fa5f3539f651901ffa675fb4e18ae9e0ef6ddc2e0dcf668bfdd86",
+    "deploy cpcv_note": "20c9b870c2e4f6e817eae02fcc5144a2325179b6f44369834be72c4189fe6a02",
+    "deploy advance_pool": "4bf2575e65bbad630acd4ee752d89e2642f1345515d6798c87d150027fa3e387",
+    "cpcv_note.set_pool": "e11c43f0bb05c090b348beba0f937d8f2d7e1d22d9b0083ed4cf58ea7cf15b0c",
+    "teurc.mint treasury 1,000,000": "fbea9446023d513a40ea269d670c4ca0de2c423bcfac329cc9e3be79128d0cd4",
+    "advance_pool.junior_deposit 10,000": "16b6747814592a3d55cf259799c36dead874397fd716d16a198748ac83d08ad6"
   }
 }

@@ -1,0 +1,13 @@
+{
+  "name": "@advance/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Operational scripts (spec §11.1). Run from the repo root, e.g. `pnpm seed`. Env comes from apps/web/.env.local.",
+  "scripts": {},
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  }
+}

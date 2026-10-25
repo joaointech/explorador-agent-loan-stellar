@@ -1,0 +1,322 @@
+// JSON contracts for every API route in spec §9.7. UI code and route handlers
+// both import from here. Extend additively; don't rename fields other code uses.
+
+import type { AgentPosition, Jsonify, NoteStatus, PoolStats } from "./chain";
+
+/** Decimal string of stroops (7 decimals), bigint-safe. */
+export type Stroops = string;
+/** Unix seconds. Protocol clock unless the field name says otherwise. */
+export type UnixSecs = number;
+/** ISO-8601 timestamp, real (wall-clock) time. */
+export type IsoTime = string;
+
+/** Body of every error response (any 4xx/5xx). */
+export interface ApiError {
+  error: { code: string; message: string };
+}
+
+export interface TxResponse {
+  txHash: string;
+  explorerUrl: string;
+}
+
+// ---------- shared ----------
+
+/** Registry-level status: notes are on-chain Active/Settled/Cancelled; a cancelled note whose carried debt was written off shows as WrittenOff. */
+export type RegistryStatus = NoteStatus | "WrittenOff";
+export type StatusCounts = Record<RegistryStatus, number> & { total: number };
+
+export type CpcvStatus = "DRAFT" | "PROVING" | "MINTED" | "SETTLED" | "CANCELLED" | "WRITTEN_OFF" | "FAILED";
+export type ChainStatus = "PENDING" | "SUBMITTED" | "CONFIRMED" | "FAILED";
+export type AuthDecision = "APPROVED" | "DECLINED";
+
+export interface DemoClock {
+  protocolNow: UnixSecs;
+  offsetSecs: number;
+  demoMode: boolean;
+}
+
+export interface DeploymentInfo {
+  network: "testnet";
+  rpcUrl: string;
+  networkPassphrase: string;
+  teurc: string;
+  cpcvNote: string;
+  advancePool: string;
+  explorerBase: string; // https://stellar.expert/explorer/testnet
+}
+
+// GET /api/config (public): what client-side code needs (Freighter flows, links)
+export interface ConfigResponse {
+  deployment: DeploymentInfo | null;
+  demoMode: boolean;
+  lithicEnabled: boolean;
+}
+
+// ---------- pool ----------
+
+// GET /api/pool/stats (public)
+export interface PoolStatsResponse {
+  stats: Jsonify<PoolStats>;
+  /** Fractions: 0.08 = 8%. Computed in the app per spec §5.5. */
+  apy: { target: number; projectedSenior: number; projectedJunior: number; trailing7dSenior: number | null };
+  notes: StatusCounts;
+  /** Cumulative EURC borrowed by card draws (from_credit). */
+  totalAdvanced: Stroops;
+  clock: DemoClock;
+}
+
+// GET /api/pool/snapshots?range=7d|30d|all (public)
+export interface PoolSnapshotPoint {
+  t: UnixSecs;
+  sharePrice: number; // assets per share, display precision
+  tvl: Stroops; // senior + junior
+  debt: Stroops;
+  seniorAssets: Stroops;
+  juniorAssets: Stroops;
+}
+export interface PoolSnapshotsResponse {
+  range: string;
+  points: PoolSnapshotPoint[];
+}
+
+// ---------- registry ----------
+
+// GET /api/registry?cursor&status&q (public; q = note id or agent address)
+export interface RegistryNote {
+  id: number;
+  agent: string; // address only, never a name
+  totalCommission: Stroops;
+  agentCommission: Stroops;
+  exploradorCommission: Stroops;
+  creditLimit: Stroops;
+  escrituraDay: number;
+  status: RegistryStatus;
+  overdue: boolean; // protocol date is past the escritura date and the note is still Active
+  mintedAt: UnixSecs;
+  mintTxHash: string | null;
+}
+export interface RegistryListResponse {
+  notes: RegistryNote[];
+  nextCursor: string | null;
+  counts: StatusCounts;
+}
+
+// GET /api/registry/[id] (public)
+export interface TimelineEvent {
+  type: string; // NoteMinted, CardDraw, NoteSettled, NoteCancelled, DebtWrittenOff, …
+  at: UnixSecs | null;
+  ledger: number;
+  txHash: string;
+  data: Record<string, unknown>;
+}
+export interface SnarkjsProof {
+  pi_a: string[];
+  pi_b: string[][];
+  pi_c: string[];
+  protocol: "groth16";
+  curve: "bn128";
+}
+export interface RegistryDetailResponse {
+  note: RegistryNote & {
+    commitment: string;
+    nullifier: string;
+    proof: { a: string; b: string; c: string }; // hex as stored on-chain (a negated)
+  };
+  /** The 9 public signals in circuit order (spec §8.2), decimal strings. */
+  publicSignals: string[];
+  /** Un-negated proof in snarkjs format, for in-browser verification. */
+  snarkjsProof: SnarkjsProof | null;
+  draws: { count: number; total: Stroops };
+  timeline: TimelineEvent[];
+  /** Human labels of what the proof hides (buyer, seller, NIFs, price, rate, address, CPCV date). */
+  hidden: string[];
+}
+
+// GET /api/investor/[address] (public)
+export interface InvestorHistoryItem {
+  type: "deposit" | "withdraw";
+  assets: Stroops;
+  shares: Stroops;
+  txHash: string;
+  at: UnixSecs;
+}
+export interface InvestorResponse {
+  address: string;
+  shares: Stroops;
+  value: Stroops;
+  deposited: Stroops;
+  withdrawn: Stroops;
+  earned: Stroops; // value + withdrawn − deposited
+  sharePriceScaled: Stroops;
+  maxWithdraw: Stroops;
+  history: InvestorHistoryItem[];
+}
+
+// ---------- agent ----------
+
+export interface AgentDeal {
+  cpcvId: string;
+  noteId: number | null;
+  status: CpcvStatus;
+  agentCommission: Stroops;
+  creditLimit: Stroops;
+  used: Stroops; // current debt on this note's line
+  escrituraDay: number;
+  overdue: boolean;
+  mintTxHash: string | null;
+}
+
+export type ActivityItem =
+  | {
+      kind: "card";
+      id: string;
+      at: IsoTime;
+      merchant: string;
+      amount: Stroops;
+      decision: AuthDecision;
+      declineReason: string | null;
+      fromBalance: Stroops | null;
+      fromCredit: Stroops | null;
+      chainStatus: ChainStatus;
+      txHash: string | null;
+    }
+  | { kind: "settlement"; id: string; at: IsoTime; noteId: number; agentPayout: Stroops; debtRepaid: Stroops; txHash: string }
+  | { kind: "cancellation"; id: string; at: IsoTime; noteId: number; debtCarried: Stroops; graceDeadline: UnixSecs | null; txHash: string }
+  | { kind: "withdrawal"; id: string; at: IsoTime; amount: Stroops; to: string; txHash: string };
+
+// GET /api/agent/overview (agent)
+export interface AgentOverviewResponse {
+  user: { email: string; displayName: string | null };
+  agent: {
+    smartAccount: string | null;
+    cardLast4: string | null;
+    cardEnabledOnChain: boolean;
+    signerKind: "passkey" | "demo-ed25519";
+  };
+  onboarding: { passkey: boolean; smartAccount: boolean; card: boolean; cardActivated: boolean };
+  position: Jsonify<AgentPosition> | null;
+  /** For ticking interest client-side between refreshes. */
+  rates: { agentAprBps: number; borrowIndex: Stroops; protocolNow: UnixSecs; fetchedAtMs: number };
+  deals: AgentDeal[];
+  activity: ActivityItem[];
+}
+
+// POST /api/agent/card/simulate (agent)
+export interface SimulateRequest {
+  amountEur: number;
+  merchant: string;
+}
+export interface SimulateResponse {
+  authorizationId: string;
+  decision: AuthDecision;
+  declineReason: string | null;
+  via: "lithic" | "simulated";
+}
+
+// GET /api/agent/card/authorizations/[id] (agent): poll for the on-chain draw
+export interface AuthorizationStatusResponse {
+  id: string;
+  decision: AuthDecision;
+  chainStatus: ChainStatus;
+  fromBalance: Stroops | null;
+  fromCredit: Stroops | null;
+  txHash: string | null;
+  explorerUrl: string | null;
+}
+
+// GET /api/agent/card/reveal (agent, sandbox only)
+export interface CardRevealResponse {
+  pan: string;
+  cvv: string;
+  expMonth: string;
+  expYear: string;
+}
+
+// POST /api/stellar/agent-tx/prepare and /submit (agent, passkey-signed)
+export type AgentTxAction =
+  | { action: "enable_card" }
+  | { action: "disable_card" }
+  | { action: "withdraw_balance"; amount: Stroops; to?: string };
+
+// ---------- admin ----------
+
+// POST /api/admin/cpcv (admin): responds with a Server-Sent Events stream of PipelineEvent
+export interface AdminCpcvInput {
+  agentId: string; // User.id of the agent
+  buyerName: string;
+  buyerNif: string; // 9 digits
+  sellerName: string;
+  sellerNif: string;
+  propertyAddress: string;
+  salePriceCents: number;
+  commissionRateBps: number; // 100…1000
+  cpcvDate: string; // YYYY-MM-DD
+  escrituraDate: string; // YYYY-MM-DD, after cpcvDate and after the protocol date
+}
+export type PipelineStep = "validating" | "signing" | "proving" | "verifying" | "minting" | "done";
+export interface PipelineEvent {
+  step: PipelineStep;
+  status: "started" | "completed" | "failed";
+  message?: string;
+  data?: { cpcvId?: string; noteId?: number; txHash?: string; explorerUrl?: string; [k: string]: unknown };
+}
+
+// GET /api/admin/cpcv and /api/admin/cpcv/[id] (admin; PII decrypted)
+export interface AdminCpcvRow {
+  id: string;
+  agent: { id: string; email: string; displayName: string | null; smartAccount: string | null };
+  propertyAddress: string;
+  buyerName: string;
+  buyerNif: string;
+  sellerName: string;
+  sellerNif: string;
+  salePriceCents: number;
+  commissionRateBps: number;
+  cpcvDay: number;
+  totalCommission: Stroops;
+  agentCommission: Stroops;
+  escrituraDay: number;
+  status: CpcvStatus;
+  noteId: number | null;
+  mintTxHash: string | null;
+  settleTxHash: string | null;
+  cancelTxHash: string | null;
+  error: string | null;
+  createdAt: IsoTime;
+}
+
+// GET /api/admin/agents (admin)
+export interface AdminAgentRow {
+  id: string;
+  email: string;
+  displayName: string | null;
+  smartAccount: string | null;
+  cardLast4: string | null;
+  cardEnabledOnChain: boolean;
+  notes: number;
+  debt: Stroops;
+  carriedDebt: Stroops;
+  graceDeadline: UnixSecs | null;
+  blocked: boolean;
+  canWriteOff: boolean; // protocol now ≥ grace deadline and carried debt > 0
+}
+
+// GET /api/admin/overview (admin): dashboard alerts
+export interface AdminOverviewResponse {
+  failedDraws: { id: string; agentEmail: string; merchant: string; amount: Stroops; attempts: number; createdAt: IsoTime }[];
+  agentsPastGrace: AdminAgentRow[];
+  deployment: DeploymentInfo | null;
+  clock: DemoClock;
+}
+
+// POST /api/admin/demo/advance-clock { days } (admin, DEMO_MODE only)
+export interface AdvanceClockResponse extends TxResponse {
+  clock: DemoClock;
+}
+
+// POST /api/admin/demo/reset (admin): SSE stream of log lines
+export interface ResetLogEvent {
+  level: "info" | "error" | "done";
+  message: string;
+}

@@ -1,0 +1,31 @@
+{
+  "name": "explorador-advance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "explorador advance: commission advances for explorador agents, funded by an LP pool on Stellar (hackathon build)",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "start": "pnpm --filter web start",
+    "lint": "pnpm --filter web lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "pnpm --filter web db:migrate",
+    "keys:generate": "pnpm --filter @advance/scripts keys:generate",
+    "circuits:build": "bash circuits/build.sh",
+    "circuits:test": "pnpm --filter @advance/circuits test",
+    "contracts:build": "cd contracts && stellar contract build",
+    "contracts:test": "cd contracts && cargo test",
+    "deploy:testnet": "pnpm --filter @advance/scripts deploy:testnet",
+    "seed": "pnpm --filter @advance/scripts seed",
+    "demo:reset": "pnpm --filter @advance/scripts demo:reset",
+    "lithic:enroll": "pnpm --filter @advance/scripts lithic:enroll",
+    "indexer": "pnpm --filter @advance/scripts indexer",
+    "e2e": "pnpm --filter @advance/scripts e2e"
+  }
+}

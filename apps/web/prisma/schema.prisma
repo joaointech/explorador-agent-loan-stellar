@@ -1,0 +1,175 @@
+// Data model from spec §9.1. Live balances/debt/credit are read from the
+// contracts; Postgres holds history (indexed events), auth, cards and the
+// encrypted CPCV PII.
+//
+// Generator/datasource: finalize for Prisma 7 (prisma.config.ts + driver
+// adapter) when wiring lib/db.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  AGENT
+  ADMIN
+}
+
+enum CpcvStatus {
+  DRAFT
+  PROVING
+  MINTED
+  SETTLED
+  CANCELLED
+  WRITTEN_OFF
+  FAILED
+}
+
+enum AuthDecision {
+  APPROVED
+  DECLINED
+}
+
+enum ChainStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  role        Role
+  displayName String?
+  createdAt   DateTime  @default(now())
+  passkeys    Passkey[]
+  agent       Agent?
+}
+
+model EmailCode {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+
+  @@index([email])
+}
+
+model Passkey {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  credentialId  String   @unique // base64url
+  publicKeyCose Bytes
+  publicKeyP256 Bytes // 65-byte uncompressed secp256r1 key, for the smart account
+  counter       Int
+  transports    String[]
+  createdAt     DateTime @default(now())
+}
+
+model Agent {
+  userId             String              @id
+  user               User                @relation(fields: [userId], references: [id])
+  smartAccount       String              @unique // C... address
+  agentField         String // hex, spec §8.4
+  lithicCardToken    String?             @unique
+  cardLast4          String?
+  cardEnabledOnChain Boolean             @default(false)
+  signerKind         String              @default("passkey") // "passkey" | "demo-ed25519" (seed agents)
+  cachedPosition     Json? // last AgentPosition read, for the ASA fallback
+  cachedAt           DateTime?
+  cpcvs              Cpcv[]
+  authorizations     CardAuthorization[]
+}
+
+model Cpcv {
+  id                   String     @id @default(cuid())
+  agentId              String
+  agent                Agent      @relation(fields: [agentId], references: [userId])
+  piiEncrypted         Bytes // AES-256-GCM JSON: buyer/seller names + NIFs, property address, sale price, rate, cpcv date
+  totalCommissionCents BigInt
+  agentCommissionCents BigInt
+  escrituraDay         Int
+  commitment           String // hex
+  nullifier            String // hex
+  proof                Json? // snarkjs proof + publicSignals
+  status               CpcvStatus @default(DRAFT)
+  noteId               Int?       @unique
+  mintTxHash           String?
+  settleTxHash         String?
+  cancelTxHash         String?
+  error                String?
+  createdAt            DateTime   @default(now())
+}
+
+model CardAuthorization {
+  id                 String       @id @default(cuid())
+  lithicToken        String       @unique // Lithic transaction token (idempotency)
+  agentId            String
+  agent              Agent        @relation(fields: [agentId], references: [userId])
+  amountCents        BigInt
+  merchant           String
+  decision           AuthDecision
+  declineReason      String?
+  chainStatus        ChainStatus  @default(PENDING)
+  fromBalanceStroops BigInt?
+  fromCreditStroops  BigInt?
+  txHash             String?
+  attempts           Int          @default(0)
+  createdAt          DateTime     @default(now())
+
+  @@index([agentId, createdAt])
+}
+
+model ChainEvent {
+  id         String   @id @default(cuid())
+  contract   String
+  type       String
+  ledger     Int
+  txHash     String
+  eventIdx   Int
+  data       Json
+  protocolTs BigInt?
+  createdAt  DateTime @default(now())
+
+  @@unique([txHash, eventIdx])
+  @@index([type, ledger])
+}
+
+model PoolSnapshot {
+  id           String   @id @default(cuid())
+  protocolTs   BigInt
+  seniorAssets BigInt
+  juniorAssets BigInt
+  feesAccrued  BigInt
+  totalDebt    BigInt
+  poolCash     BigInt
+  sharePrice   String // scaled decimal string
+  shareSupply  BigInt
+  createdAt    DateTime @default(now())
+
+  @@index([protocolTs])
+}
+
+model Deployment {
+  id          String   @id @default(cuid())
+  network     String
+  active      Boolean  @default(true)
+  teurc       String
+  cpcvNote    String
+  advancePool String
+  wasmHashes  Json
+  createdAt   DateTime @default(now())
+}
+
+model IndexerCursor {
+  id         String @id
+  lastLedger Int
+}

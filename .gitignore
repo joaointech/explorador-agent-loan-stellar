@@ -1,0 +1,20 @@
+node_modules/
+.pnpm-store/
+.DS_Store
+*.log
+coverage/
+.vercel
+
+# env files: never commit secrets
+.env
+.env.*
+!.env.example
+
+# Rust / Soroban
+target/
+contracts/target/
+.stellar/
+
+# circuits: intermediate build products (final artifacts are committed under apps/web/zk)
+circuits/build/
+*.ptau

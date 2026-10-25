@@ -35,6 +35,12 @@ const schema = z.object({
   TREASURY_SECRET: optional,
   CARD_SETTLEMENT_PUBLIC: optional,
   SPONSOR_SECRET: optional,
+  // Smart accounts (agent passkey wallet). The contract ids default to the
+  // smart-account-kit testnet deployment (see lib/stellar/smart-account.ts).
+  DEMO_SIGNER_SEED: optional,
+  SMART_ACCOUNT_WASM_HASH: optional,
+  WEBAUTHN_VERIFIER_ID: optional,
+  ED25519_VERIFIER_ID: optional,
   DEMO_MODE: z
     .string()
     .optional()

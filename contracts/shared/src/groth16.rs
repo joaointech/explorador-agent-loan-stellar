@@ -269,4 +269,34 @@ mod test {
         // 40 MiB of memory. Keep verification under a quarter of it.
         assert!(cpu < 100_000_000, "verification costs {cpu} instructions");
     }
+
+    /// The deploy script passes apps/web/zk/verification_key.soroban.json to the
+    /// cpcv_note constructor: it must be the key these tests verify against.
+    #[test]
+    fn fixture_matches_the_committed_deploy_verification_key() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../apps/web/zk/verification_key.soroban.json"
+        );
+        let json =
+            std::fs::read_to_string(path).expect("apps/web/zk/verification_key.soroban.json");
+        let hex = |b: &[u8]| -> std::string::String {
+            b.iter().map(|x| std::format!("{x:02x}")).collect()
+        };
+        for (name, bytes) in [
+            ("alpha", &fixture::VK_ALPHA[..]),
+            ("beta", &fixture::VK_BETA[..]),
+            ("gamma", &fixture::VK_GAMMA[..]),
+            ("delta", &fixture::VK_DELTA[..]),
+        ] {
+            let expected = std::format!("\"{name}\": \"{}\"", hex(bytes));
+            assert!(json.contains(&expected), "stale fixture or vk: {name}");
+        }
+        for (i, ic) in fixture::VK_IC.iter().enumerate() {
+            assert!(
+                json.contains(&std::format!("\"{}\"", hex(ic))),
+                "stale fixture or vk: ic[{i}]"
+            );
+        }
+    }
 }

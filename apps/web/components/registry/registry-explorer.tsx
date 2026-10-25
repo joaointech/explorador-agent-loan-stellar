@@ -61,20 +61,44 @@ function StatusFilter({ value, onChange }: { value: RegistryStatus | null; onCha
   );
 }
 
+/** The search box's text, the URL query it last saw, and searches sent whose URL echo hasn't arrived. */
+export interface SearchSync {
+  draft: string;
+  synced: string;
+  sent: string[];
+}
+
+/**
+ * Reconciles the search box with the URL's `q`. The router applies History
+ * API updates in a transition, so `value` can lag typing: when it changes to a
+ * term we sent, it's our own echo and the draft (maybe typed further since)
+ * stays; any other change (Back/Forward, the empty state's "Clear search")
+ * replaces the draft.
+ */
+export function syncSearch(state: SearchSync, value: string): SearchSync {
+  if (value === state.synced) return state;
+  const echo = state.sent.indexOf(value);
+  if (echo >= 0) return { ...state, synced: value, sent: state.sent.slice(echo + 1) };
+  return { draft: normalizeQuery(state.draft) === value ? state.draft : value, synced: value, sent: [] };
+}
+
 /**
  * Search box for a note id ("12", "#12") or an agent address (full, partial
  * or "CDLZ…4XQA"). Typing updates the URL after a short pause; Enter at once.
  */
 function RegistrySearch({ value, onSearch }: { value: string; onSearch: (q: string) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [synced, setSynced] = useState(value);
-  // The URL changed from outside (back/forward, a status chip): show its query.
-  if (value !== synced) {
-    setSynced(value);
-    if (normalizeQuery(draft) !== value) setDraft(value);
-  }
+  const [stored, setStored] = useState<SearchSync>({ draft: value, synced: value, sent: [] });
+  const current = syncSearch(stored, value);
+  if (current !== stored) setStored(current);
+  const { draft } = current;
 
-  const search = useEffectEvent((q: string) => onSearch(q));
+  const setDraft = (text: string) => setStored((s) => ({ ...syncSearch(s, value), draft: text }));
+  const send = (q: string) => {
+    setStored((s) => ({ ...s, sent: [...s.sent, q] }));
+    onSearch(q);
+  };
+
+  const search = useEffectEvent((q: string) => send(q));
   useEffect(() => {
     const term = normalizeQuery(draft);
     if (term === value) return;
@@ -85,7 +109,7 @@ function RegistrySearch({ value, onSearch }: { value: string; onSearch: (q: stri
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const term = normalizeQuery(draft);
-    if (term !== value) onSearch(term);
+    if (term !== value) send(term);
   };
 
   return (
@@ -112,7 +136,7 @@ function RegistrySearch({ value, onSearch }: { value: string; onSearch: (q: stri
           aria-label="Clear search"
           onClick={() => {
             setDraft("");
-            if (value) onSearch("");
+            if (value) send("");
           }}
           className="absolute inset-y-0 right-1 my-auto inline-flex size-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-slate-100 hover:text-fg dark:hover:bg-slate-800"
         >
@@ -137,12 +161,12 @@ const uniqueById = (notes: RegistryNote[]) => {
 
 const statusLabel = (status: RegistryStatus | null) => STATUS_FILTERS.find((f) => f.value === status)?.label.toLowerCase() ?? "";
 
-/** "5 notes", "Showing 25 of 57 notes", "2 active notes", "1 note matching “12”". */
-export function resultSummary(filters: RegistryFilters, shown: number, counts: RegistryListResponse["counts"] | null): string {
-  const noun = (n: number) => `${filters.status ? `${statusLabel(filters.status)} ` : ""}${n === 1 ? "note" : "notes"}`;
+/** "5 notes", "Showing 25 of 57 notes", "2 active notes", "1 note matching “12”", "25+ notes matching “C”". */
+export function resultSummary(filters: RegistryFilters, shown: number, counts: RegistryListResponse["counts"] | null, hasMore = false): string {
+  const noun = (n: number, plural = false) => `${filters.status ? `${statusLabel(filters.status)} ` : ""}${n === 1 && !plural ? "note" : "notes"}`;
   const total = !filters.q && counts ? (filters.status ? counts[filters.status] : counts.total) : null;
   if (total !== null && total > shown) return `Showing ${formatNumber(shown)} of ${formatNumber(total)} ${noun(total)}`;
-  const base = `${formatNumber(shown)} ${noun(shown)}`;
+  const base = hasMore ? `${formatNumber(shown)}+ ${noun(shown, true)}` : `${formatNumber(shown)} ${noun(shown)}`;
   return filters.q ? `${base} matching “${filters.q}”` : base;
 }
 
@@ -168,6 +192,7 @@ export function RegistryExplorer({ explainer }: { explainer: ReactNode }) {
 
   function navigate(next: Partial<RegistryFilters>, mode: "push" | "replace") {
     const href = registryPageHref({ ...filters, ...next });
+    if (href === registryPageHref(filters)) return;
     if (mode === "push") window.history.pushState(null, "", href);
     else window.history.replaceState(null, "", href);
   }
@@ -185,7 +210,7 @@ export function RegistryExplorer({ explainer }: { explainer: ReactNode }) {
   }
 
   let results: ReactNode;
-  if (first.status === "loading") {
+  if (first.status === "loading" || (first.refreshing && notes.length === 0)) {
     results = <RegistryResultsSkeleton />;
   } else if (first.status === "error") {
     results = <LoadError title="Couldn't load the registry" error={first.error} onRetry={first.retry} />;
@@ -238,7 +263,13 @@ export function RegistryExplorer({ explainer }: { explainer: ReactNode }) {
   }
 
   const status =
-    first.status === "success" ? (first.refreshing ? "Updating results…" : resultSummary(filters, notes.length, counts)) : first.status === "loading" ? "Loading notes…" : "";
+    first.status === "success"
+      ? first.refreshing
+        ? "Updating results…"
+        : resultSummary(filters, notes.length, counts, nextCursor !== null)
+      : first.status === "loading"
+        ? "Loading notes…"
+        : "";
 
   return (
     <RegistryLayout counts={<StatusCounts counts={counts} loading={first.status === "loading"} />} explainer={explainer}>

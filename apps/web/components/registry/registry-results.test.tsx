@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { listResponse } from "./__tests__/fixtures";
 import { ApiRequestError } from "./api-client";
 import { describeApiError } from "./load-error";
-import { resultSummary } from "./registry-explorer";
+import { resultSummary, syncSearch, type SearchSync } from "./registry-explorer";
 import { RegistryResults } from "./registry-results";
 import { StatusCounts } from "./status-counts";
 import { TrustModel } from "./trust-model";
@@ -74,6 +74,35 @@ describe("result summary", () => {
     expect(resultSummary({ status: "WrittenOff", q: "" }, 1, { ...counts, WrittenOff: 1 })).toBe("1 written off note");
     expect(resultSummary({ status: null, q: "12" }, 1, counts)).toBe("1 note matching “12”");
     expect(resultSummary({ status: "Settled", q: "CCI4" }, 0, counts)).toBe("0 settled notes matching “CCI4”");
+    expect(resultSummary({ status: null, q: "C" }, 25, counts, true)).toBe("25+ notes matching “C”");
+    expect(resultSummary({ status: null, q: "C" }, 1, counts, true)).toBe("1+ notes matching “C”");
+  });
+});
+
+describe("search box ↔ URL sync", () => {
+  const start: SearchSync = { draft: "", synced: "", sent: [] };
+
+  it("keeps typing that happened while our own search's URL update was in flight", () => {
+    // Typed "CDLZ", the debounce sent it, then "4" was typed before the URL caught up.
+    const typing: SearchSync = { draft: "CDLZ4", synced: "", sent: ["CDLZ"] };
+    expect(syncSearch(typing, "CDLZ")).toEqual({ draft: "CDLZ4", synced: "CDLZ", sent: [] });
+  });
+
+  it("skips echoes the router batched together", () => {
+    const state: SearchSync = { draft: "CDLZ45", synced: "", sent: ["CDLZ", "CDLZ4", "CDLZ45"] };
+    expect(syncSearch(state, "CDLZ4")).toEqual({ draft: "CDLZ45", synced: "CDLZ4", sent: ["CDLZ45"] });
+  });
+
+  it("takes outside changes (Back/Forward) into the box", () => {
+    expect(syncSearch({ draft: "12", synced: "12", sent: [] }, "")).toEqual({ draft: "", synced: "", sent: [] });
+    expect(syncSearch({ ...start, sent: ["x"] }, "CCI4")).toEqual({ draft: "CCI4", synced: "CCI4", sent: [] });
+    // Same term modulo spacing: keep what the person typed.
+    expect(syncSearch({ draft: " 12 ", synced: "", sent: [] }, "12").draft).toBe(" 12 ");
+  });
+
+  it("returns the same object when nothing changed (no extra render)", () => {
+    const state: SearchSync = { draft: "abc", synced: "abc", sent: [] };
+    expect(syncSearch(state, "abc")).toBe(state);
   });
 });
 

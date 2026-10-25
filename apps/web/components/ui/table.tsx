@@ -4,7 +4,10 @@ import { cn } from "./cn";
 
 /**
  * Table building blocks. The container scrolls horizontally inside its own
- * rounded card, so wide tables never make the page scroll at 375 px.
+ * rounded card, so wide tables never make the page scroll at 375 px. It is
+ * `relative` so absolutely positioned descendants (the `sr-only` "Actions"
+ * header label) are clipped by it: otherwise they escape the scroller and
+ * widen the whole page.
  *
  *   <TableContainer>
  *     <Table>
@@ -15,7 +18,7 @@ import { cn } from "./cn";
  */
 export function TableContainer({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("w-full overflow-x-auto rounded-card border border-line bg-card shadow-card", className)} {...rest}>
+    <div className={cn("relative w-full overflow-x-auto rounded-card border border-line bg-card shadow-card", className)} {...rest}>
       {children}
     </div>
   );

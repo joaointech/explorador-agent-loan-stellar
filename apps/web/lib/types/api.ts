@@ -322,6 +322,38 @@ export interface AdminCpcvRow {
   cancelTxHash: string | null;
   error: string | null;
   createdAt: IsoTime;
+  /** Minted (active) note whose escritura date is before today's protocol date. */
+  overdue: boolean;
+  /** True when piiEncrypted could not be decrypted (wrong key); the PII fields are then empty. */
+  piiUnavailable?: boolean;
+}
+
+// GET /api/admin/cpcv (admin): newest first
+export interface AdminCpcvListResponse {
+  cpcvs: AdminCpcvRow[];
+  /** Protocol clock used for `overdue` (null when the chain read failed). */
+  clock: DemoClock | null;
+}
+
+// GET /api/admin/cpcv/[id] (admin)
+export interface AdminCpcvDetailResponse {
+  cpcv: AdminCpcvRow;
+  commitment: string; // hex, "" until proven
+  nullifier: string;
+  /** Commitment salt (hex) from the encrypted record: opens the commitment for an auditor. */
+  salt: string | null;
+  /** `Cpcv.proof`: the un-negated snarkjs proof and the 9 public signals. */
+  proof: { proof: SnarkjsProof; publicSignals: string[] } | null;
+  /** Live credit line of a minted note (null otherwise, or when the chain read fails). */
+  line: { creditLimit: Stroops; principal: Stroops; debt: Stroops; interest: Stroops; available: Stroops } | null;
+  /** The agent's position now, for the settle/cancel previews (null when unavailable). */
+  agentPosition: { cardBalance: Stroops; carriedDebt: Stroops; graceDeadline: UnixSecs | null } | null;
+  clock: DemoClock | null;
+}
+
+// POST /api/admin/cpcv/[id]/settle and /api/admin/cpcv/[id]/cancel (admin)
+export interface AdminCpcvActionResponse extends TxResponse {
+  cpcv: AdminCpcvRow;
 }
 
 // GET /api/admin/agents (admin)
@@ -333,11 +365,30 @@ export interface AdminAgentRow {
   cardLast4: string | null;
   cardEnabledOnChain: boolean;
   notes: number;
+  /** Notes still active (minted, not settled or cancelled). */
+  activeNotes: number;
   debt: Stroops;
   carriedDebt: Stroops;
   graceDeadline: UnixSecs | null;
   blocked: boolean;
   canWriteOff: boolean; // protocol now ≥ grace deadline and carried debt > 0
+  /** Where debt/carried debt/grace/blocked came from: a live read, the ASA cache, or nothing (no smart account / no data). */
+  positionSource: "chain" | "cache" | "none";
+}
+export interface AdminAgentsResponse {
+  agents: AdminAgentRow[];
+  clock: DemoClock | null;
+}
+
+// POST /api/admin/agents/[id]/write-off (admin)
+export interface AdminWriteOffResponse extends TxResponse {
+  /** How many of the agent's cancelled CPCVs are now WRITTEN_OFF. */
+  writtenOff: number;
+}
+
+// POST /api/admin/junior/deposit, /api/admin/junior/withdraw, /api/admin/fees/claim (admin) → TxResponse
+export interface AdminAmountRequest {
+  amountEur: number;
 }
 
 // GET /api/admin/overview (admin): dashboard alerts
@@ -345,10 +396,16 @@ export interface AdminOverviewResponse {
   failedDraws: { id: string; agentEmail: string; merchant: string; amount: Stroops; attempts: number; createdAt: IsoTime }[];
   agentsPastGrace: AdminAgentRow[];
   deployment: DeploymentInfo | null;
+  /** Falls back to the wall clock (offset 0) when the chain can't be read; see `warnings`. */
   clock: DemoClock;
+  /** Live pool stats for the dashboard (null when the chain read failed). */
+  stats: Jsonify<PoolStats> | null;
+  /** Reads that failed (chain or deployment), for a banner. */
+  warnings: string[];
 }
 
-// POST /api/admin/demo/advance-clock { days } (admin, DEMO_MODE only)
+// POST /api/admin/demo/advance-clock (admin, DEMO_MODE only)
+export type AdvanceClockRequest = { days: number } | { toGraceDeadlineOf: string /* agent User.id */ };
 export interface AdvanceClockResponse extends TxResponse {
   clock: DemoClock;
 }

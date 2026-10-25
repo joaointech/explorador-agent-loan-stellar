@@ -1,8 +1,19 @@
-// Interface owned by the ZK workstream (spec §8.6). The admin CPCV pipeline
-// calls proveCpcv; the implementation replaces the stub body.
+/// <reference path="./vendor.d.ts" />
+// Server-side Groth16 proving for CPCV attestations (spec §8.6). The admin
+// CPCV pipeline calls proveCpcv. Works from Node route handlers (process.cwd()
+// = apps/web) and tsx scripts; no `server-only`.
 
-import { notImplemented } from "@/lib/http";
+import { groth16 } from "snarkjs";
+
+import { requireEnv } from "@/lib/env";
 import type { SnarkjsProof } from "@/lib/types/api";
+
+import { zkArtifacts, loadVerificationKey } from "./artifacts";
+import { buildCpcvWitnessInput, type ZkKeys } from "./attestation";
+import { fieldToBytes, fieldToHex } from "./field";
+import { normalizeSnarkjsProof, proofToSoroban } from "./format";
+
+export type { ZkKeys } from "./attestation";
 
 export interface CpcvPrivateInput {
   buyerNif: string; // 9 digits
@@ -33,11 +44,64 @@ export interface CpcvProof {
   salt: string;
 }
 
+/** `ATTESTER_EDDSA_PRIVKEY` and `NULLIFIER_SECRET` from the environment. */
+export function zkKeysFromEnv(): ZkKeys {
+  return {
+    attesterPrivKey: requireEnv("ATTESTER_EDDSA_PRIVKEY"),
+    nullifierSecret: requireEnv("NULLIFIER_SECRET"),
+  };
+}
+
 /** Signs the attestation, generates the Groth16 proof and verifies it locally before returning. */
 export async function proveCpcv(
-  _agentAddress: string,
-  _input: CpcvPrivateInput,
-  _onStep?: (step: ProveStep) => void,
+  agentAddress: string,
+  input: CpcvPrivateInput,
+  onStep?: (step: ProveStep) => void,
 ): Promise<CpcvProof> {
-  notImplemented("proveCpcv", "zk");
+  return proveCpcvWithKeys(agentAddress, input, zkKeysFromEnv(), onStep);
+}
+
+/** proveCpcv with explicit keys (scripts, fixtures, tests). `salt` is random unless given. */
+export async function proveCpcvWithKeys(
+  agentAddress: string,
+  input: CpcvPrivateInput,
+  keys: ZkKeys,
+  onStep?: (step: ProveStep) => void,
+  opts: { salt?: bigint } = {},
+): Promise<CpcvProof> {
+  onStep?.("signing");
+  const witness = await buildCpcvWitnessInput(agentAddress, input, keys, opts);
+
+  onStep?.("proving");
+  const { wasm, zkey } = zkArtifacts();
+  const { proof, publicSignals } = await groth16.fullProve(witness.circuitInput, wasm, zkey);
+  if (publicSignals.length !== 9 || publicSignals.some((s, i) => s !== witness.publicSignals[i])) {
+    throw new Error("Proof public signals do not match the attested values (stale circuit artifacts?)");
+  }
+
+  onStep?.("verifying");
+  const snarkjsProof = normalizeSnarkjsProof(proof);
+  if (!(await groth16.verify(loadVerificationKey(), publicSignals, snarkjsProof))) {
+    throw new Error("Local Groth16 verification failed (verification key does not match the proving key?)");
+  }
+
+  return {
+    totalCommissionCents: witness.totalCommissionCents,
+    agentCommissionCents: witness.agentCommissionCents,
+    commitment: fieldToBytes(witness.commitment),
+    nullifier: fieldToBytes(witness.nullifier),
+    publicSignals,
+    snarkjsProof,
+    sorobanProof: proofToSoroban(snarkjsProof),
+    salt: fieldToHex(witness.salt),
+  };
+}
+
+/**
+ * Terminates snarkjs' cached worker threads. Long-running servers keep them
+ * (faster proofs); tsx scripts and tests call this so the process can exit.
+ */
+export async function releaseZkResources(): Promise<void> {
+  const curve = (globalThis as { curve_bn128?: { terminate(): Promise<void> } | null }).curve_bn128;
+  if (curve) await curve.terminate();
 }

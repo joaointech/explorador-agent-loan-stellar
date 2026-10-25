@@ -28,7 +28,7 @@ export function HeroVisual({ className }: { className?: string }) {
       </div>
 
       {/* Virtual card */}
-      <div className="relative aspect-[1.586/1] overflow-hidden rounded-[22px] bg-gradient-to-br from-primary via-blue-600 to-blue-800 p-6 text-white shadow-brand">
+      <div className="relative aspect-[1.586/1] overflow-hidden rounded-[22px] bg-gradient-to-br from-blue-600 to-blue-800 p-6 text-white shadow-brand">
         <div className="pointer-events-none absolute -top-20 -right-16 size-56 rounded-full bg-white/10 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-24 -left-10 size-48 rounded-full bg-sky-300/20 blur-3xl" />
         <div className="relative flex h-full flex-col justify-between">
@@ -46,10 +46,10 @@ export function HeroVisual({ className }: { className?: string }) {
           </div>
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-[10px] font-semibold tracking-[0.2em] text-blue-100/80 uppercase">Available to spend</p>
+              <p className="text-[10px] font-semibold tracking-[0.2em] text-blue-50 uppercase">Available to spend</p>
               <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums">{formatEur(DEAL.creditLimit)}</p>
             </div>
-            <p className="text-right text-[11px] leading-tight text-blue-100/80">
+            <p className="text-right text-[11px] leading-tight text-blue-50">
               CPCV signed today
               <br />
               escritura in {DEAL.days} days

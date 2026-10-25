@@ -1,7 +1,7 @@
 // Landing hero stat pills (spec §10.2): GET /api/pool/stats → display strings.
 // Pure, so it is tested without a browser.
 
-import { formatEur, formatNumber, formatPercent } from "@/lib/format";
+import { formatEur, formatNumber, formatPercent, roundDiv } from "@/lib/format";
 import type { PoolStatsResponse } from "@/lib/types/api";
 import { STROOPS_PER_EUR } from "@/lib/units";
 
@@ -17,9 +17,16 @@ export interface PoolStatValues {
   totalAdvanced: string;
 }
 
-/** Whole euros; compact ("€1.2m") from a million up so the pill never truncates on a phone. */
-function euros(stroops: bigint): string {
-  return stroops >= 1_000_000n * STROOPS_PER_EUR ? formatEur(stroops, { compact: true }) : formatEur(stroops, { decimals: 0 });
+/**
+ * Whole euros ("€110,000"); from a million up, millions with one decimal
+ * ("€1.2m", "€12m") so the pill never truncates on a phone. Built by hand:
+ * Intl's compact notation differs between ICU versions ("€12m" vs "€12.0M").
+ */
+export function euros(stroops: bigint): string {
+  const whole = roundDiv(stroops, STROOPS_PER_EUR);
+  if (whole < 1_000_000n) return formatEur(stroops, { decimals: 0 });
+  const tenths = roundDiv(whole, 100_000n);
+  return `€${formatNumber(tenths / 10n)}${tenths % 10n === 0n ? "" : `.${tenths % 10n}`}m`;
 }
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);

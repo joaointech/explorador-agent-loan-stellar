@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { poolStatsResponse } from "./__tests__/fixtures";
-import { poolStatValues } from "./pool-stat-values";
+import { euros, poolStatValues } from "./pool-stat-values";
 
 describe("landing pool stat pills", () => {
   it("formats TVL, projected senior APY, active notes and total advanced", () => {
@@ -25,5 +25,17 @@ describe("landing pool stat pills", () => {
     expect(poolStatValues(big).tvl).toBe("€999,999");
     expect(() => poolStatValues({} as never)).toThrow();
     expect(() => poolStatValues({ ...poolStatsResponse(), apy: { ...poolStatsResponse().apy, projectedSenior: Number.NaN } })).toThrow();
+  });
+
+  it("formats millions by hand, independent of the ICU version", () => {
+    const eur = (n: number) => BigInt(Math.round(n * 1e7));
+    expect(euros(eur(1_000_000))).toBe("€1m");
+    expect(euros(eur(1_050_000))).toBe("€1.1m");
+    expect(euros(eur(1_249_999))).toBe("€1.2m");
+    expect(euros(eur(25_960_000))).toBe("€26m");
+    expect(euros(eur(1_234_500_000))).toBe("€1,234.5m");
+    expect(euros(eur(999_999.4))).toBe("€999,999");
+    expect(euros(eur(999_999.6))).toBe("€1m");
+    expect(euros(0n)).toBe("€0");
   });
 });

@@ -15,20 +15,20 @@ const GRACE_DAYS = PARAMS.gracePeriodSecs / 86_400;
 
 function ZkPrivacyCard({ className }: { className?: string }) {
   return (
-    <article className={cn("relative overflow-hidden rounded-panel bg-gradient-to-br from-primary to-blue-700 p-5 text-white shadow-brand sm:p-8 dark:to-blue-800", className)}>
+    <article className={cn("relative overflow-hidden rounded-panel bg-gradient-to-br from-blue-600 to-blue-800 p-5 text-white shadow-brand sm:p-8", className)}>
       <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-white/10 blur-3xl" />
       <div className="relative">
         <span className="flex size-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm">
           <ShieldCheck aria-hidden className="size-5" />
         </span>
         <h3 className="mt-4 text-lg font-bold sm:text-2xl">Zero-knowledge privacy</h3>
-        <p className="mt-2 max-w-xl text-sm leading-relaxed text-blue-50/90 sm:text-base">
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-blue-50 sm:text-base">
           Every CPCV Note carries a Groth16 proof that Stellar verifies before it mints. The proof shows the deal is real and the numbers add
           up, and reveals nothing personal.
         </p>
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <div>
-            <h4 className="text-xs font-semibold tracking-[0.2em] text-blue-100/80 uppercase">Public, on-chain</h4>
+            <h4 className="text-xs font-semibold tracking-[0.2em] text-blue-50 uppercase">Public, on-chain</h4>
             <ul className="mt-3 flex flex-col gap-2 text-sm">
               {PUBLIC_FIELDS.map((f) => (
                 <li key={f} className="flex gap-2">
@@ -39,11 +39,11 @@ function ZkPrivacyCard({ className }: { className?: string }) {
             </ul>
           </div>
           <div>
-            <h4 className="text-xs font-semibold tracking-[0.2em] text-blue-100/80 uppercase">Hidden, never on-chain</h4>
+            <h4 className="text-xs font-semibold tracking-[0.2em] text-blue-50 uppercase">Hidden, never on-chain</h4>
             <ul className="mt-3 flex flex-col gap-2 text-sm">
               {HIDDEN_SUMMARY.map((f) => (
                 <li key={f} className="flex gap-2">
-                  <Lock aria-hidden className="mt-0.5 size-4 shrink-0 text-blue-100/80" />
+                  <Lock aria-hidden className="mt-0.5 size-4 shrink-0 text-blue-100" />
                   {f}
                 </li>
               ))}
@@ -51,7 +51,7 @@ function ZkPrivacyCard({ className }: { className?: string }) {
           </div>
         </div>
         <div className="mt-7">
-          <Button href="/registry" variant="onPrimary" arrow>
+          <Button href="/registry" variant="onPrimary" arrow className="focus-visible:outline-white">
             See every deal on-chain
           </Button>
         </div>

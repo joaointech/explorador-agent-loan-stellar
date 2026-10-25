@@ -17,6 +17,11 @@ vi.mock("@/lib/stellar/contracts", () => chain);
 const session = vi.hoisted(() => ({ requireAgent: vi.fn() }));
 vi.mock("@/lib/auth/session", () => session);
 
+// The route syncs the indexer first. Unmocked, that sync resolves the committed
+// deployments/testnet.json (no Deployment row in the test database), indexes
+// the real testnet events into the test database and skews the clock estimate.
+vi.mock("@/lib/indexer/sync", () => ({ syncIfStale: async () => null }));
+
 import { GET } from "@/app/api/agent/overview/route";
 import { db } from "@/lib/db";
 import { HttpError, unauthorized } from "@/lib/http";

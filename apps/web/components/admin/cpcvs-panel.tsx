@@ -169,7 +169,7 @@ export function CpcvsPanel() {
                 <div className="flex flex-col gap-0.5">
                   <DateText value={r.escrituraDay} />
                   {protocolDay !== null && r.status === "MINTED" && (
-                    <span className={cn("text-xs", r.overdue ? "font-semibold text-orange-600 dark:text-orange-400" : "text-muted")}>
+                    <span className={cn("text-xs", r.overdue ? "font-semibold text-orange-700 dark:text-orange-400" : "text-muted")}>
                       {formatRelativeDays(r.escrituraDay, protocolDay)}
                     </span>
                   )}

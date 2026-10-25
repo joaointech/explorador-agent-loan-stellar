@@ -148,7 +148,7 @@ export function LoginForm({ next }: { next?: string }) {
           </PasskeySignInButton>
         </div>
 
-        <div className="my-6 flex items-center gap-3 text-xs font-medium tracking-wide text-subtle uppercase" role="separator" aria-label="or">
+        <div className="my-6 flex items-center gap-3 text-xs font-medium tracking-wide text-muted uppercase" role="separator" aria-label="or">
           <span className="h-px flex-1 bg-line" />
           or use your email
           <span className="h-px flex-1 bg-line" />

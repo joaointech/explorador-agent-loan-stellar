@@ -40,7 +40,7 @@ export function Amount({
   const cents = toCents(value, unit);
   const toneClass =
     tone === "positive" || (tone === "auto" && cents > 0n && (sign === "always" || sign === "exceptZero"))
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-emerald-700 dark:text-emerald-400"
       : tone === "negative" || (tone === "auto" && cents < 0n)
         ? "text-red-600 dark:text-red-400"
         : tone === "muted"

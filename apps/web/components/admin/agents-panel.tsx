@@ -105,7 +105,7 @@ export function AgentsPanel() {
                 a.cardLast4 ? (
                   <div className="flex flex-col gap-0.5">
                     <span className="font-mono text-sm">•••• {a.cardLast4}</span>
-                    <span className={a.cardEnabledOnChain ? "text-xs font-medium text-emerald-600 dark:text-emerald-400" : "text-xs text-muted"}>
+                    <span className={a.cardEnabledOnChain ? "text-xs font-medium text-emerald-700 dark:text-emerald-400" : "text-xs text-muted"}>
                       {a.cardEnabledOnChain ? "Enabled on-chain" : "Not enabled"}
                     </span>
                   </div>

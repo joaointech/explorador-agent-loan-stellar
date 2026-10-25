@@ -20,12 +20,15 @@ export interface Remote<T> {
   data: T | undefined;
   error: string | null;
   loading: boolean;
+  /** Wall-clock ms when `data` was received. */
+  updatedAt?: number;
 }
 
-export const remote = <T>(data: T | undefined, opts: { error?: string | null; loading?: boolean } = {}): Remote<T> => ({
+export const remote = <T>(data: T | undefined, opts: { error?: string | null; loading?: boolean; updatedAt?: number } = {}): Remote<T> => ({
   data,
   error: opts.error ?? null,
   loading: opts.loading ?? false,
+  updatedAt: opts.updatedAt,
 });
 
 export type SnapshotRange = "7d" | "30d" | "all";
@@ -52,12 +55,26 @@ export interface InvestModel {
   investor: Remote<InvestorResponse>;
   /** Live contract reads for the connected address. */
   live: Remote<LivePosition>;
+  /** Deposits/withdrawals confirmed in this session, until the indexer reports them. */
+  pendingFlows: VaultFlow[];
 }
 
 // ---------- actions ----------
 
 export type ActionPhase = TxPhase | "fallback";
 export type OnPhase = (phase: ActionPhase, info?: { txHash?: string }) => void;
+
+/** A confirmed vault transaction of this session. */
+export interface VaultFlow {
+  type: "deposit" | "withdraw";
+  /** tEURC moved, stroops. */
+  assets: bigint;
+  /** eaSR minted or burned. */
+  shares: bigint;
+  txHash: string;
+  /** Wall-clock ms of the confirmation. */
+  confirmedAt: number;
+}
 
 export interface ActionResult {
   /** Human summary, e.g. "Deposited €5,000.00 for 4,987.1234 eaSR." */
@@ -75,8 +92,8 @@ export interface InvestActions {
   getTeurc: (onPhase: OnPhase) => Promise<ActionResult>;
   deposit: (assets: bigint, onPhase: OnPhase) => Promise<ActionResult>;
   withdraw: (assets: bigint, onPhase: OnPhase) => Promise<ActionResult>;
-  /** Burns exact shares ("Max": a full exit without dust). */
-  redeem: (shares: bigint, onPhase: OnPhase) => Promise<ActionResult>;
+  /** "Max": everything withdrawable now, from a fresh read (redeem all shares, or withdraw what liquidity allows). */
+  withdrawMax: (onPhase: OnPhase) => Promise<ActionResult>;
   /** Shares `deposit(assets)` would mint. */
   previewDeposit: (assets: bigint) => Promise<bigint>;
   /** Shares `withdraw(assets)` would burn. */
@@ -116,21 +133,46 @@ export interface PositionView {
 
 const big = (s: string | undefined | null): bigint | null => (s === undefined || s === null || s === "" ? null : BigInt(s));
 
+export interface PositionSources {
+  investor?: InvestorResponse;
+  live?: LivePosition;
+  /** When `live` was read (wall-clock ms). */
+  liveUpdatedAt?: number;
+  stats?: PoolStatsResponse;
+  /** Vault transactions confirmed in this session. */
+  pendingFlows?: VaultFlow[];
+}
+
 /**
  * Merges the investor API (history, deposited/withdrawn) with live contract
  * reads (shares, value, limits, balances). Live values win when both exist;
  * `earned` is recomputed from the live value so it moves with the share price.
+ *
+ * Right after a transaction the live read already includes it while the
+ * indexed totals don't yet: a confirmed flow missing from the API history is
+ * added to deposited/withdrawn (and to the history) once the live read is
+ * newer than the confirmation, so `earned` never jumps by the deposit itself.
  */
-export function derivePosition(investor: InvestorResponse | undefined, live: LivePosition | undefined, stats: PoolStatsResponse | undefined): PositionView {
+export function derivePosition({ investor, live, liveUpdatedAt, stats, pendingFlows = [] }: PositionSources): PositionView {
   const shares = live?.shares ?? big(investor?.shares);
   const value = live?.value ?? big(investor?.value);
-  const deposited = big(investor?.deposited);
-  const withdrawn = big(investor?.withdrawn);
-  const earned =
-    value !== null && deposited !== null && withdrawn !== null ? value + withdrawn - deposited : big(investor?.earned);
+  const indexed = investor?.history ?? [];
+  const unindexed = pendingFlows.filter((f) => !indexed.some((h) => h.txHash === f.txHash));
+  const reflected = live ? unindexed.filter((f) => liveUpdatedAt !== undefined && liveUpdatedAt >= f.confirmedAt) : [];
+  const sum = (type: VaultFlow["type"]) => reflected.filter((f) => f.type === type).reduce((s, f) => s + f.assets, 0n);
+  const deposited = investor ? BigInt(investor.deposited) + sum("deposit") : null;
+  const withdrawn = investor ? BigInt(investor.withdrawn) + sum("withdraw") : null;
+  const earned = value !== null && deposited !== null && withdrawn !== null ? value + withdrawn - deposited : big(investor?.earned);
   let sharePriceScaled = big(stats?.stats.sharePriceScaled) ?? big(investor?.sharePriceScaled);
   if (sharePriceScaled === null && live && live.shares > 0n) sharePriceScaled = (live.value * SCALE) / live.shares;
-  const history = investor?.history ?? [];
+  const at = stats?.clock.protocolNow;
+  const history: InvestorHistoryItem[] = [
+    ...unindexed
+      .slice()
+      .reverse()
+      .map((f) => ({ type: f.type, assets: String(f.assets), shares: String(f.shares), txHash: f.txHash, at: at ?? Math.floor(f.confirmedAt / 1000) })),
+    ...indexed,
+  ];
   const hasShares = (shares ?? 0n) > 0n;
   return {
     shares,

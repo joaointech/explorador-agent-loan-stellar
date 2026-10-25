@@ -13,7 +13,7 @@ import { FREIGHTER_INSTALL_URL } from "@/lib/wallet/constants";
 import { networkName } from "@/lib/wallet/freighter";
 
 import { formatBalance, formatShares } from "./format";
-import type { InvestActions, PositionView, WalletView } from "./model";
+import type { DeploymentState, InvestActions, PositionView, WalletView } from "./model";
 import { TxStatus, useTx } from "./tx-status";
 
 type WalletActions = Pick<InvestActions, "connect" | "disconnect" | "recheckWallet" | "fundXlm" | "getTeurc">;
@@ -38,7 +38,7 @@ export function WalletCard({
   wallet,
   position,
   liveLoading,
-  deployed,
+  deployment,
   explorerBase,
   actions,
   className,
@@ -46,11 +46,12 @@ export function WalletCard({
   wallet: WalletView;
   position: PositionView;
   liveLoading: boolean;
-  deployed: boolean;
+  deployment: DeploymentState["status"];
   explorerBase?: string;
   actions: WalletActions;
   className?: string;
 }) {
+  const deployed = deployment === "ready";
   const toast = useToast();
   const xlmTx = useTx();
   const eurcTx = useTx();
@@ -196,7 +197,8 @@ export function WalletCard({
               Get 10,000 tEURC
             </Button>
           </div>
-          {!deployed && <p className="mt-2 text-xs text-muted">tEURC is available once the pool is deployed.</p>}
+          {deployment === "not-deployed" && <p className="mt-2 text-xs text-muted">tEURC is available once the pool is deployed.</p>}
+          {deployment === "error" && <p className="mt-2 text-xs text-muted">tEURC needs the pool&apos;s configuration, which couldn&apos;t load. Try again shortly.</p>}
           <TxStatus
             state={helperState}
             explorerBase={explorerBase}

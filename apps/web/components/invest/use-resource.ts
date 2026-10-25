@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { ApiError } from "@/lib/types/api";
 
@@ -9,6 +9,8 @@ import type { Remote } from "./model";
 interface Entry<T> {
   data?: T;
   error: string | null;
+  /** Wall-clock ms when `data` arrived. */
+  updatedAt?: number;
 }
 
 interface CacheState<T> {
@@ -28,6 +30,8 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
  * `intervalMs` while the tab is visible. Results are cached per key, so a
  * refetch never blanks the screen; with `keepPrevious`, the last data of
  * another key stays visible while a new key loads (e.g. a chart range).
+ * Per key, only the newest request may write: a slow poll that started
+ * before a refresh can't overwrite fresher data.
  */
 export function useResource<T>(
   key: string | null,
@@ -35,13 +39,18 @@ export function useResource<T>(
   { intervalMs, keepPrevious = false }: { intervalMs?: number; keepPrevious?: boolean } = {},
 ): Resource<T> {
   const [cache, setCache] = useState<CacheState<T>>({ entries: {} });
+  const requests = useRef<Record<string, number>>({});
 
   const fetchKey = async (k: string) => {
+    const id = (requests.current[k] ?? 0) + 1;
+    requests.current[k] = id;
     try {
       const data = await load(k);
-      setCache((c) => ({ entries: { ...c.entries, [k]: { data, error: null } }, last: data }));
+      if (requests.current[k] !== id) return;
+      setCache((c) => ({ entries: { ...c.entries, [k]: { data, error: null, updatedAt: Date.now() } }, last: data }));
     } catch (err) {
-      setCache((c) => ({ ...c, entries: { ...c.entries, [k]: { data: c.entries[k]?.data, error: errorMessage(err) } } }));
+      if (requests.current[k] !== id) return;
+      setCache((c) => ({ ...c, entries: { ...c.entries, [k]: { ...c.entries[k], error: errorMessage(err) } } }));
     }
   };
 
@@ -60,11 +69,11 @@ export function useResource<T>(
   }, [key, intervalMs]);
 
   const entry = key === null ? undefined : cache.entries[key];
-  const loading = key !== null && entry === undefined;
   return {
     data: entry?.data ?? (keepPrevious && key !== null ? cache.last : undefined),
     error: entry?.error ?? null,
-    loading,
+    loading: key !== null && entry === undefined,
+    updatedAt: entry?.updatedAt,
     refresh: () => (key === null ? Promise.resolve() : fetchKey(key)),
   };
 }

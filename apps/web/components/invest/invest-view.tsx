@@ -39,11 +39,11 @@ function LoadingGrid() {
  * explainer. From lg: position on the left, wallet and the vault panel on the right.
  */
 export function InvestView({ model, actions }: { model: InvestModel; actions: InvestActions }) {
-  const { deployment, wallet, stats, snapshots, investor, live, range } = model;
+  const { deployment, wallet, stats, snapshots, investor, live, range, pendingFlows } = model;
   const deployed = deployment.status === "ready";
   const explorerBase = deployed ? deployment.deployment.explorerBase : undefined;
   const connected = wallet.status === "connected";
-  const position = derivePosition(investor.data, live.data, stats.data);
+  const position = derivePosition({ investor: investor.data, live: live.data, liveUpdatedAt: live.updatedAt, stats: stats.data, pendingFlows });
   const params = stats.data?.stats.params;
   const positionError = live.error ?? investor.error;
 
@@ -65,7 +65,7 @@ export function InvestView({ model, actions }: { model: InvestModel; actions: In
               wallet={wallet}
               position={position}
               liveLoading={live.loading}
-              deployed={deployed}
+              deployment={deployment.status}
               explorerBase={explorerBase}
               actions={actions}
               className="lg:col-span-5 lg:col-start-8 lg:row-start-1"
@@ -83,7 +83,7 @@ export function InvestView({ model, actions }: { model: InvestModel; actions: In
               wallet={wallet}
               position={position}
               stats={stats.data}
-              deployed={deployed}
+              deployment={deployment.status}
               explorerBase={explorerBase}
               actions={actions}
               className="lg:col-span-5 lg:col-start-8 lg:row-start-2"

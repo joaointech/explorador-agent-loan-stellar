@@ -73,6 +73,7 @@ export function previewModel(state: PreviewState, range: SnapshotRange = "7d"): 
     range,
     investor: remote(connected && deployed ? (empty ? fixtureEmptyInvestor() : fixtureInvestor()) : undefined),
     live: remote(live),
+    pendingFlows: [],
   };
 }
 
@@ -98,7 +99,7 @@ export function previewActions(go: (state: PreviewState) => void, setRange: (r: 
     getTeurc: (onPhase) => simulate(onPhase, "10,000 tEURC would be minted to your wallet."),
     deposit: (assets, onPhase) => simulate(onPhase, `Deposited ${formatEur(assets)} for ${formatShares(fixturePreviewDeposit(assets))}.`),
     withdraw: (assets, onPhase) => simulate(onPhase, `Withdrew ${formatEur(assets)}; ${formatShares(fixturePreviewWithdraw(assets))} burned.`),
-    redeem: (sharesIn, onPhase) => simulate(onPhase, `Redeemed ${formatShares(sharesIn)}.`),
+    withdrawMax: (onPhase) => simulate(onPhase, `Withdrew ${formatEur(fixtureLive().maxWithdraw)} for ${formatShares(fixtureLive().maxRedeem)}.`),
     previewDeposit: async (assets) => {
       await pause(250);
       return fixturePreviewDeposit(assets);

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ToastProvider } from "@/components/ui/toast";
 import { STROOPS_PER_EUR } from "@/lib/units";
 
-import { FIXTURE_SHARE_PRICE_SCALED, fixtureInvestor, fixtureLive, fixtureStats } from "./fixtures";
+import { FIXTURE_SHARE_PRICE_SCALED, fixtureEmptyInvestor, fixtureInvestor, fixtureLive, fixtureStats } from "./fixtures";
 import { previewActions, previewModel } from "./invest-preview";
 import { InvestView } from "./invest-view";
 import { derivePosition, stroopsToEurInput } from "./model";
@@ -98,25 +98,55 @@ describe("InvestView renders every state with mocked data", () => {
 });
 
 describe("derivePosition", () => {
+  const EUR = STROOPS_PER_EUR;
+
   it("prefers live reads and recomputes earned from the live value", () => {
-    const live = { ...fixtureLive(), value: 5_100n * STROOPS_PER_EUR };
-    const p = derivePosition(fixtureInvestor(), live, fixtureStats());
-    expect(p.value).toBe(5_100n * STROOPS_PER_EUR);
-    expect(p.earned).toBe(100n * STROOPS_PER_EUR); // 5,100 + 1,000 withdrawn − 6,000 deposited
+    const live = { ...fixtureLive(), value: 5_100n * EUR };
+    const p = derivePosition({ investor: fixtureInvestor(), live, stats: fixtureStats() });
+    expect(p.value).toBe(5_100n * EUR);
+    expect(p.earned).toBe(100n * EUR); // 5,100 + 1,000 withdrawn − 6,000 deposited
     expect(p.sharePriceScaled).toBe(FIXTURE_SHARE_PRICE_SCALED);
     expect(p.hasShares).toBe(true);
     expect(p.isEmpty).toBe(false);
   });
 
   it("falls back to the API, and knows an unfunded account from an unknown one", () => {
-    const api = derivePosition(fixtureInvestor(), undefined, undefined);
+    const api = derivePosition({ investor: fixtureInvestor() });
     expect(api.shares).toBe(BigInt(fixtureInvestor().shares));
     expect(api.xlm).toBeUndefined();
-    expect(derivePosition(undefined, fixtureLive({ unfunded: true }), undefined).xlm).toBeNull();
+    expect(derivePosition({ live: fixtureLive({ unfunded: true }) }).xlm).toBeNull();
   });
 
   it("is empty before the first deposit", () => {
-    expect(derivePosition(undefined, fixtureLive({ empty: true }), undefined).isEmpty).toBe(true);
+    expect(derivePosition({ live: fixtureLive({ empty: true }) }).isEmpty).toBe(true);
+  });
+
+  describe("a deposit confirmed before the indexer reports it", () => {
+    const flow = { type: "deposit" as const, assets: 5_000n * EUR, shares: 4_960n * EUR, txHash: "f".repeat(64), confirmedAt: 1_000 };
+    const before = fixtureEmptyInvestor();
+
+    it("doesn't count as earnings once the live read includes it", () => {
+      const live = { ...fixtureLive({ empty: true }), shares: flow.shares, value: 5_000n * EUR };
+      const p = derivePosition({ investor: before, live, liveUpdatedAt: 2_000, pendingFlows: [flow] });
+      expect(p.deposited).toBe(5_000n * EUR);
+      expect(p.earned).toBe(0n);
+      expect(p.history[0]).toMatchObject({ type: "deposit", txHash: flow.txHash });
+      expect(p.isEmpty).toBe(false);
+    });
+
+    it("isn't added while the live read still predates it", () => {
+      const p = derivePosition({ investor: before, live: fixtureLive({ empty: true }), liveUpdatedAt: 500, pendingFlows: [flow] });
+      expect(p.deposited).toBe(0n);
+      expect(p.earned).toBe(0n);
+    });
+
+    it("is dropped once the API history contains it", () => {
+      const indexed = { ...before, deposited: String(5_000n * EUR), history: [{ type: "deposit" as const, assets: String(flow.assets), shares: String(flow.shares), txHash: flow.txHash, at: 1 }] };
+      const live = { ...fixtureLive({ empty: true }), shares: flow.shares, value: 5_000n * EUR };
+      const p = derivePosition({ investor: indexed, live, liveUpdatedAt: 2_000, pendingFlows: [flow] });
+      expect(p.deposited).toBe(5_000n * EUR);
+      expect(p.history).toHaveLength(1);
+    });
   });
 });
 

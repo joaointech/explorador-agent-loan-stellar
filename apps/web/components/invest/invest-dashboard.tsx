@@ -4,15 +4,16 @@ import { useState } from "react";
 
 import { formatEur } from "@/lib/format";
 import type { ConfigResponse, DeploymentInfo, InvestorResponse, PoolSnapshotsResponse, PoolStatsResponse } from "@/lib/types/api";
+import { STROOPS_PER_EUR } from "@/lib/units";
 import { TESTNET_PASSPHRASE } from "@/lib/wallet/constants";
 import { WalletError } from "@/lib/wallet/errors";
 import { freighterSigner } from "@/lib/wallet/freighter";
-import type { PoolClient, PoolSigner } from "@/lib/wallet/pool";
+import type { PoolClient, PoolSigner, VaultTxResult } from "@/lib/wallet/pool";
 import { useFreighter } from "@/lib/wallet/use-freighter";
 
 import { formatShares } from "./format";
 import { InvestView } from "./invest-view";
-import type { DeploymentState, InvestActions, InvestModel, OnPhase, SnapshotRange } from "./model";
+import type { DeploymentState, InvestActions, InvestModel, OnPhase, SnapshotRange, VaultFlow } from "./model";
 import { ApiRequestError, getJson, useResource } from "./use-resource";
 
 // The live /invest dashboard: wires GET /api/config, /api/pool/stats,
@@ -72,6 +73,15 @@ export function InvestDashboard() {
     { intervalMs: 30_000 },
   );
 
+  // Confirmed deposits/withdrawals per investor, until the indexer reports them (see derivePosition).
+  const [flows, setFlows] = useState<{ key: string; flow: VaultFlow }[]>([]);
+  const pendingFlows = flows.filter((f) => f.key === investorKey).map((f) => f.flow);
+  const recordFlow = (type: VaultFlow["type"], res: VaultTxResult) => {
+    if (!investorKey) return;
+    const flow: VaultFlow = { type, assets: res.assets, shares: res.shares, txHash: res.txHash, confirmedAt: Date.now() };
+    setFlows((all) => [...all.slice(-9), { key: investorKey, flow }]);
+  };
+
   const refreshAccount = () => Promise.all([live.refresh(), investor.refresh()]);
   /** After a transaction: live reads now, the indexed APIs again once the indexer has caught up. */
   const refreshAfterTx = () => {
@@ -130,18 +140,24 @@ export function InvestDashboard() {
     deposit: async (assets, onPhase) => {
       const s = await signer(onPhase);
       const res = await (await loadPool()).deposit(s, assets);
+      recordFlow("deposit", res);
       refreshAfterTx();
       return { message: `Deposited ${formatEur(res.assets)} and received ${formatShares(res.shares)}.`, txHash: res.txHash };
     },
     withdraw: async (assets, onPhase) => {
       const s = await signer(onPhase);
       const res = await (await loadPool()).withdraw(s, assets);
+      recordFlow("withdraw", res);
       refreshAfterTx();
       return { message: `Withdrew ${formatEur(res.assets)}; ${formatShares(res.shares)} burned.`, txHash: res.txHash };
     },
-    redeem: async (shares, onPhase) => {
+    withdrawMax: async (onPhase) => {
       const s = await signer(onPhase);
-      const res = await (await loadPool()).redeem(s, shares);
+      const wallet = await loadPool();
+      // Without stats, a euro of slack is plenty for any testnet pool.
+      const slack = stats.data ? wallet.liquiditySlack(BigInt(stats.data.stats.totalDebt), stats.data.stats.params) : STROOPS_PER_EUR;
+      const res = await wallet.withdrawMax(s, slack);
+      recordFlow("withdraw", res);
       refreshAfterTx();
       return { message: `Withdrew ${formatEur(res.assets)} for ${formatShares(res.shares)}.`, txHash: res.txHash };
     },
@@ -164,6 +180,7 @@ export function InvestDashboard() {
     range,
     investor,
     live,
+    pendingFlows,
   };
 
   return <InvestView model={model} actions={actions} />;

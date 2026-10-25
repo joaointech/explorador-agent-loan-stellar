@@ -8,6 +8,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { Eyebrow } from "@/components/ui/typography";
 import { postLoginPath } from "@/lib/auth/redirect";
+import { emailSchema } from "@/lib/auth/schemas";
 import type { ApiError, EmailStartResponse, EmailVerifyResponse } from "@/lib/types/api";
 
 type Result<T> = { ok: true; data: T } | { ok: false; code: string; message: string };
@@ -97,7 +98,14 @@ export function LoginForm({ next }: { next?: string }) {
 
   function onEmailSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void requestCode(email);
+    // Same schema as the API, checked here so the message reads "Enter a valid
+    // email address" rather than the API's field-prefixed "email: …".
+    const parsed = emailSchema.safeParse(email);
+    if (!parsed.success) {
+      setError({ code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Enter a valid email address" });
+      return;
+    }
+    void requestCode(parsed.data);
   }
 
   function onCodeSubmit(event: FormEvent<HTMLFormElement>) {

@@ -86,6 +86,22 @@ const rateToBps = (pct: string): number | null => {
 
 const onlyDigits = (v: string) => v.replace(/\D/g, "").slice(0, 9);
 
+const PIPELINE_CARD_ID = "cpcv-pipeline";
+
+/**
+ * On phones the pipeline sits below the form, out of sight when "Generate proof &
+ * mint" is tapped: bring it into view so the steps can be watched (spec §14 step 3).
+ * No-op when it is already visible (the sticky column on desktop).
+ */
+function revealPipeline() {
+  const el = document.getElementById(PIPELINE_CARD_ID);
+  if (!el) return;
+  const { top, bottom } = el.getBoundingClientRect();
+  if (top < window.innerHeight - 160 && bottom > 0) return;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+}
+
 function LivePreview({ salePrice, ratePct, escrituraDate, protocolDay }: { salePrice: string; ratePct: string; escrituraDate: string; protocolDay: number | null }) {
   const cents = parseEurToCents(salePrice);
   const bps = rateToBps(ratePct);
@@ -186,6 +202,9 @@ export function NewCpcvPanel() {
     setLastInput(input);
     setPhase("running");
     setOutcome({});
+    // After React has committed the running state: a smooth scroll started during
+    // the re-render is cancelled by it.
+    requestAnimationFrame(revealPipeline);
     let state = idlePipeline();
     // Mutated by `apply` while the stream is read.
     const result: { finished: "done" | "failed" | null } = { finished: null };
@@ -342,7 +361,7 @@ export function NewCpcvPanel() {
         <div className="flex flex-col gap-6 lg:sticky lg:top-24">
           <LivePreview salePrice={form.salePrice} ratePct={form.ratePct} escrituraDate={escrituraDate} protocolDay={protocolDay} />
 
-          <Card>
+          <Card id={PIPELINE_CARD_ID} className="scroll-mt-28">
             <CardHeader title="Pipeline" description={phase === "form" ? "Runs when you submit; each step reports here live." : undefined} />
             <div className="mt-5">
               <PipelineSteps

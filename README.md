@@ -242,10 +242,11 @@ QA aids: `/agent/preview` (behind an agent session; dev or `DEMO_MODE` only) and
 
 **With a Lithic sandbox key:**
 
-1. Set `LITHIC_API_KEY` in `apps/web/.env.local`. Agents onboarded from then on get real sandbox virtual cards (Visa test BIN). Cards issued earlier stay on the simulated network.
-2. Expose the dev server: `cloudflared tunnel --url http://localhost:3000` or `ngrok http 3000`.
+1. Set `LITHIC_API_KEY` in `apps/web/.env.local`. Agents onboarded from then on get real sandbox virtual cards (Visa test BIN). Agents created earlier keep their simulated card until you run `pnpm lithic:cards`, which issues a Lithic card for each of them (on-chain card consent is per agent, so nothing is re-activated).
+2. Expose the dev server: `cloudflared tunnel --url http://localhost:3000` (a quick tunnel, no account) or `ngrok http 3000`. A quick tunnel gets a new URL every time it starts, so re-run step 3 after restarting it.
 3. Enroll the ASA responder: `pnpm lithic:enroll --url https://<tunnel-host>`. It prints `LITHIC_ASA_HMAC_SECRET=whsec_…`; add that line to `.env.local` and restart. `--status` and `--disenroll` handle housekeeping.
 4. Lithic starts signing ASA requests a few minutes after the secret is first created. Once the secret is set, unsigned requests are rejected, so early purchases may decline; wait and retry.
+5. Lithic's sandbox account has its own spend limits in front of the ASA responder (by default $5,000 a day and $20,000 a month across all cards). A purchase above what is left is declined by Lithic itself, never reaching our responder (it shows as `DECLINED`, not `INSUFFICIENT_FUNDS`). Raise them so that our responder alone decides: `PATCH /v1/accounts/{token}` with `daily_spend_limit` / `monthly_spend_limit` (cents).
 
 In production (`NODE_ENV=production`) the ASA endpoint fails closed: without `LITHIC_ASA_HMAC_SECRET` it answers 503 `ASA_NOT_CONFIGURED` and Lithic declines the purchase, so enroll before going live. The simulated network runs in-process and doesn't use the endpoint.
 

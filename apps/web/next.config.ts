@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   // Cache Components is off on purpose: almost every page shows live chain
   // state, so the previous dynamic-by-default model is simpler (DECISIONS.md).
   reactCompiler: true,
+  // Load the Stellar SDK with Node's own require on the server. Bundled, the
+  // server could end up with two copies of its XDR classes, and transactions
+  // built from simulated auth entries failed to serialize ("functionName:
+  // expected string, Uint8Array, or XdrString") inside route handlers.
+  serverExternalPackages: ["@stellar/stellar-sdk"],
   // Routes that generate Groth16 proofs read the circuit artifacts from
   // apps/web/zk at runtime (spec §8.6); file tracing can't follow those
   // process.cwd()-relative reads, so bundle them explicitly.

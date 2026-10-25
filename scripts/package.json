@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Operational scripts (spec §11.1). Run from the repo root, e.g. `pnpm seed`. Env comes from apps/web/.env.local.",
+  "description": "Operational scripts (spec \u00a711.1). Run from the repo root, e.g. `pnpm seed`. Env comes from apps/web/.env.local.",
   "scripts": {
     "keys:generate": "tsx keys-generate.ts",
     "deploy:testnet": "tsx deploy-testnet.ts",
@@ -16,7 +16,8 @@
     "vk:soroban": "tsx vk-to-soroban.ts",
     "smoke:smart-account": "tsx smoke-smart-account.ts",
     "indexer": "tsx indexer.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lithic:cards": "tsx lithic-cards.ts"
   },
   "devDependencies": {
     "@types/node": "^20",

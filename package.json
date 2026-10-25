@@ -26,6 +26,7 @@
     "demo:reset": "pnpm --filter @advance/scripts demo:reset",
     "lithic:enroll": "pnpm --filter @advance/scripts lithic:enroll",
     "indexer": "pnpm --filter @advance/scripts indexer",
-    "e2e": "pnpm --filter @advance/scripts e2e"
+    "e2e": "pnpm --filter @advance/scripts e2e",
+    "lithic:cards": "pnpm --filter @advance/scripts lithic:cards"
   }
 }

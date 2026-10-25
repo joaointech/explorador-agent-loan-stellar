@@ -1,0 +1,65 @@
+# AWS swarm stack for explorador advance (advance.explorador.ai) — stack
+# `advance`, service advance_web, on the shared prod-apps swarm behind
+# prod-apps-alb. Deployed from the manager by deploy-aws.sh.
+#
+# Runtime config is injected from Secrets Manager at deploy time via env_file
+# (deploy-aws.sh writes web.env next to this file, in /home/ubuntu/advance,
+# from prod-advance-web-env). The image takes no build args: the app reads no
+# NEXT_PUBLIC_* variable, everything is server-side runtime env.
+#
+# Published host port 8106 -> 3000 (ALB target group + host rule for
+# advance.explorador.ai; ALB health check path `/`).
+#
+# The container runs `prisma migrate deploy` before the server
+# (deploy/docker-entrypoint.sh). Rollouts are start-first, so the previous
+# task keeps serving while the new one migrates: migrations must stay additive.
+version: "3.9"
+
+x-deploy: &deploy
+  mode: replicated
+  replicas: 1
+  placement:
+    constraints: [node.role == worker]
+  restart_policy:
+    condition: on-failure
+    delay: 10s
+    max_attempts: 3
+    window: 120s
+  update_config:
+    parallelism: 1
+    delay: 10s
+    failure_action: rollback
+    order: start-first
+  rollback_config:
+    parallelism: 1
+    delay: 10s
+    order: start-first
+
+services:
+  web:
+    image: 904776124553.dkr.ecr.eu-west-2.amazonaws.com/advance-web:${WEB_TAG:-latest}
+    ports:
+      - 8106:3000
+    env_file:
+      - ./web.env
+    environment:
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      # Longer than the ALB's 60 s idle timeout: Node must never close a
+      # keep-alive connection the ALB is about to reuse (sporadic 502s).
+      KEEP_ALIVE_TIMEOUT: "65000"
+    # As irrealista's services: the RDS endpoint resolves publicly (to its private IP).
+    dns: 8.8.8.8
+    # Next.js finishes in-flight requests on SIGTERM; Reset demo streams for minutes.
+    stop_grace_period: 30s
+    healthcheck:
+      # The landing page is static (its numbers load in the browser), so the
+      # probe touches neither Postgres nor Stellar. Node's fetch: the slim
+      # image has no curl/wget. 127.0.0.1, not localhost (IPv6 ::1 first on
+      # some resolvers). Any 2xx/3xx is healthy.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/',{redirect:'manual',signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.status>=200&&r.status<400?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+    deploy: *deploy

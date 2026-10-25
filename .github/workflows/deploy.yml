@@ -1,0 +1,66 @@
+name: Deploy to AWS (swarm, advance.explorador.ai)
+
+# Builds the explorador advance image (deploy/Dockerfile), pushes it to ECR and
+# rolls the swarm service advance_web behind prod-apps-alb (eu-west-2), via
+# deploy-aws.sh. Mirrors explorador's (irrealista) deploy workflow.
+#
+# RUNNER: ubuntu-latest (GitHub-hosted, amd64 like the swarm). explorador's
+# self-hosted NUC runner is registered to its own repo only. The image is built
+# on this runner and pushed (LOCAL_BUILD=1); the 4GB swarm worker never builds.
+#
+# AWS auth is via GitHub OIDC (no static keys): the job assumes the IAM role
+# gha-oidc-advance-deploy. Repo secret required: SWARM_SSH_KEY (swarm deploy
+# SSH key; not an AWS credential).
+#
+# A green run is a real deploy: config is read from Secrets Manager
+# (prod-advance-web-env) at deploy time, the container migrates the database
+# before it serves, and the script waits until the new task is running healthy.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "deploy/**"
+      - "deploy-aws.sh"
+      - ".dockerignore"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-advance-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # request the GitHub OIDC token used to assume the AWS role
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  AWS_PROFILE: ""   # use the OIDC credentials, not a local profile
+  LOCAL_BUILD: "1"  # build on this runner (amd64) and push, instead of on the swarm worker
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::904776124553:role/gha-oidc-advance-deploy
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Prepare swarm SSH key
+        env:
+          # Passed as data, never pasted into the script.
+          SWARM_SSH_KEY: ${{ secrets.SWARM_SSH_KEY }}
+        run: |
+          printf '%s\n' "$SWARM_SSH_KEY" > "$RUNNER_TEMP/swarm_id_rsa"
+          chmod 600 "$RUNNER_TEMP/swarm_id_rsa"
+      - name: Deploy web
+        run: |
+          chmod +x ./deploy-aws.sh
+          SSH_KEY="$RUNNER_TEMP/swarm_id_rsa" ./deploy-aws.sh web --tag "prod-$(git rev-parse --short HEAD)"

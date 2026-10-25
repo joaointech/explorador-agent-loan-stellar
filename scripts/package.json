@@ -15,6 +15,7 @@
     "lithic:enroll": "tsx lithic-enroll.ts",
     "vk:soroban": "tsx vk-to-soroban.ts",
     "smoke:smart-account": "tsx smoke-smart-account.ts",
+    "sample:cpcv": "tsx make-sample-cpcv.ts",
     "indexer": "tsx indexer.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

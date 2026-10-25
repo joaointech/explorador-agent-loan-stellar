@@ -1,3 +1,6 @@
+// Ambient types for snarkjs/circomlibjs, also needed when scripts/ (whose tsconfig
+// only includes scripts/**) compiles this module.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./vendor.d.ts" />
 // Poseidon (circomlibjs, matching circomlib's Poseidon template) and the
 // property_hash encoding (spec §8.4). Server-side (Node route handlers and

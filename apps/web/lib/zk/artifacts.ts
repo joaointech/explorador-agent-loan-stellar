@@ -27,11 +27,13 @@ function candidates(): string[] {
   const cwd = process.cwd();
   const fromEnv = process.env.ZK_ARTIFACTS_DIR;
   return [
-    ...(fromEnv ? [path.resolve(cwd, fromEnv)] : []),
-    path.join(cwd, "zk"),
-    path.join(cwd, "apps", "web", "zk"),
-    path.join(cwd, "..", "apps", "web", "zk"),
-    path.join(cwd, "..", "..", "apps", "web", "zk"),
+    // Script-only fallbacks are marked turbopackIgnore so `next build` does not
+    // trace the whole project; the Next.js location stays statically scoped.
+    ...(fromEnv ? [path.resolve(/*turbopackIgnore: true*/ cwd, fromEnv)] : []),
+    path.join(process.cwd(), "zk"),
+    path.join(/*turbopackIgnore: true*/ cwd, "apps", "web", "zk"),
+    path.join(/*turbopackIgnore: true*/ cwd, "..", "apps", "web", "zk"),
+    path.join(/*turbopackIgnore: true*/ cwd, "..", "..", "apps", "web", "zk"),
   ];
 }
 
@@ -39,9 +41,9 @@ function candidates(): string[] {
 export function zkArtifacts(): ZkArtifacts {
   if (cached) return cached;
   for (const dir of candidates()) {
-    const wasm = path.join(dir, WASM_FILE);
-    const zkey = path.join(dir, ZKEY_FILE);
-    const vk = path.join(dir, VK_FILE);
+    const wasm = path.join(/*turbopackIgnore: true*/ dir, WASM_FILE);
+    const zkey = path.join(/*turbopackIgnore: true*/ dir, ZKEY_FILE);
+    const vk = path.join(/*turbopackIgnore: true*/ dir, VK_FILE);
     if (existsSync(wasm) && existsSync(zkey) && existsSync(vk)) {
       cached = { dir, wasm, zkey, vk };
       return cached;
@@ -57,6 +59,6 @@ let vkCache: SnarkjsVerificationKey | undefined;
 
 /** apps/web/zk/verification_key.json (also served at /zk/verification_key.json). */
 export function loadVerificationKey(): SnarkjsVerificationKey {
-  vkCache ??= JSON.parse(readFileSync(zkArtifacts().vk, "utf8")) as SnarkjsVerificationKey;
+  vkCache ??= JSON.parse(readFileSync(/*turbopackIgnore: true*/ zkArtifacts().vk, "utf8")) as SnarkjsVerificationKey;
   return vkCache;
 }

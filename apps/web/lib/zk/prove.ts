@@ -1,3 +1,6 @@
+// Ambient types for snarkjs/circomlibjs, also needed when scripts/ (whose tsconfig
+// only includes scripts/**) compiles this module.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./vendor.d.ts" />
 // Server-side Groth16 proving for CPCV attestations (spec §8.6). The admin
 // CPCV pipeline calls proveCpcv. Works from Node route handlers (process.cwd()
@@ -5,7 +8,7 @@
 
 import { groth16 } from "snarkjs";
 
-import { requireEnv } from "@/lib/env";
+import { requireEnv } from "../env";
 import type { SnarkjsProof } from "@/lib/types/api";
 
 import { zkArtifacts, loadVerificationKey } from "./artifacts";

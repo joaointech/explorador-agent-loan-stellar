@@ -1,3 +1,6 @@
+// Ambient types for snarkjs/circomlibjs, also needed when scripts/ (whose tsconfig
+// only includes scripts/**) compiles this module.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./vendor.d.ts" />
 // Re-verifies an on-chain note with snarkjs (spec §8.5, registry "Verify proof
 // in your browser"): un-negate A, rebuild the public signals, groth16.verify.

@@ -2,7 +2,7 @@
 // registry API returns and what the browser feeds to `snarkjs.groth16.verify`.
 // Browser-safe.
 
-import { STROOPS_PER_CENT } from "@/lib/units";
+import { STROOPS_PER_CENT } from "../units";
 
 import { agentFieldValue } from "./agent-field";
 import { bigIntToBytes, fieldFromBytes, toHex } from "./field";

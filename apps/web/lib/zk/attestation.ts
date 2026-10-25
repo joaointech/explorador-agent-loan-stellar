@@ -3,8 +3,7 @@
 
 import { Address } from "@stellar/stellar-sdk";
 
-import { badRequest } from "@/lib/http";
-import { totalCommissionCents as computeTotalCommission } from "@/lib/units";
+import { totalCommissionCents as computeTotalCommission } from "../units";
 
 import { agentFieldValue } from "./agent-field";
 import { U32_MAX, U64_MAX, randomField31 } from "./field";
@@ -33,32 +32,47 @@ export interface CpcvWitnessInput {
   propertyHash: bigint;
 }
 
+/**
+ * Invalid CPCV input (a client error, HTTP 400 if surfaced by an API route).
+ * `code`: INVALID_AGENT | INVALID_NIF | INVALID_PRICE | INVALID_RATE | INVALID_DATE | INVALID_ADDRESS.
+ */
+export class CpcvInputError extends Error {
+  readonly status = 400;
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message);
+    this.name = "CpcvInputError";
+  }
+}
+
 const NIF = /^\d{9}$/;
 
-/** Rejects input the circuit would reject, with a readable message (HTTP 400). */
+/** Rejects input the circuit would reject, with a readable message (`CpcvInputError`). */
 export function validateCpcvInput(agentAddress: string, input: CpcvPrivateInput): void {
   try {
     Address.fromString(agentAddress);
   } catch {
-    throw badRequest(`Invalid agent address: ${agentAddress}`, "INVALID_AGENT");
+    throw new CpcvInputError(`Invalid agent address: ${agentAddress}`, "INVALID_AGENT");
   }
-  if (!NIF.test(input.buyerNif)) throw badRequest("Buyer NIF must be 9 digits", "INVALID_NIF");
-  if (!NIF.test(input.sellerNif)) throw badRequest("Seller NIF must be 9 digits", "INVALID_NIF");
+  if (!NIF.test(input.buyerNif)) throw new CpcvInputError("Buyer NIF must be 9 digits", "INVALID_NIF");
+  if (!NIF.test(input.sellerNif)) throw new CpcvInputError("Seller NIF must be 9 digits", "INVALID_NIF");
   if (input.salePriceCents <= 0n || input.salePriceCents > U64_MAX) {
-    throw badRequest("Sale price must be positive and fit in 64 bits of cents", "INVALID_PRICE");
+    throw new CpcvInputError("Sale price must be positive and fit in 64 bits of cents", "INVALID_PRICE");
   }
   const rate = input.commissionRateBps;
   if (!Number.isInteger(rate) || rate < 100 || rate > 1000) {
-    throw badRequest("Commission rate must be between 100 and 1000 bps (1%–10%)", "INVALID_RATE");
+    throw new CpcvInputError("Commission rate must be between 100 and 1000 bps (1%–10%)", "INVALID_RATE");
   }
   for (const [name, day] of [
     ["CPCV day", input.cpcvDay],
     ["Escritura day", input.escrituraDay],
   ] as const) {
-    if (!Number.isInteger(day) || day < 0 || BigInt(day) > U32_MAX) throw badRequest(`${name} is out of range`, "INVALID_DATE");
+    if (!Number.isInteger(day) || day < 0 || BigInt(day) > U32_MAX) throw new CpcvInputError(`${name} is out of range`, "INVALID_DATE");
   }
-  if (input.cpcvDay >= input.escrituraDay) throw badRequest("The escritura must be after the CPCV", "INVALID_DATE");
-  if (input.propertyAddress.trim() === "") throw badRequest("Property address is required", "INVALID_ADDRESS");
+  if (input.cpcvDay >= input.escrituraDay) throw new CpcvInputError("The escritura must be after the CPCV", "INVALID_DATE");
+  if (input.propertyAddress.trim() === "") throw new CpcvInputError("Property address is required", "INVALID_ADDRESS");
 }
 
 /**
@@ -84,13 +98,13 @@ export async function buildCpcvWitnessInput(
 
   const totalCommissionCents = computeTotalCommission(salePrice, input.commissionRateBps);
   const agentCommissionCents = totalCommissionCents / 2n;
-  if (totalCommissionCents <= 0n) throw badRequest("The commission rounds down to zero", "INVALID_PRICE");
+  if (totalCommissionCents <= 0n) throw new CpcvInputError("The commission rounds down to zero", "INVALID_PRICE");
 
   let propHash: bigint;
   try {
     propHash = await propertyHash(input.propertyAddress);
   } catch (err) {
-    throw badRequest(err instanceof Error ? err.message : String(err), "INVALID_ADDRESS");
+    throw new CpcvInputError(err instanceof Error ? err.message : String(err), "INVALID_ADDRESS");
   }
 
   const commitment = await poseidon([buyerNif, sellerNif, salePrice, rate, propHash, cpcvDay, escrituraDay, salt]);

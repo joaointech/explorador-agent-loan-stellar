@@ -100,6 +100,57 @@ export function formatClockOffset(offsetSecs: number): string {
 }
 
 /**
+ * The chip's look, without data fetching (for previews and tests).
+ * - `chip`: rounded chip for the blue header bar.
+ * - `bar`: slim full-width strip under the header.
+ */
+export function DemoClockChipView({
+  protocolNow,
+  offsetSecs,
+  variant,
+  className,
+}: {
+  protocolNow: number;
+  offsetSecs: number;
+  variant: "chip" | "bar";
+  className?: string;
+}) {
+  const title = "The protocol clock is fast-forwarded for this demo. Deals, interest and grace periods use this date.";
+  const content = (
+    <>
+      <span aria-hidden className="relative flex size-2">
+        <span className="absolute inline-flex size-full animate-live-ring rounded-full bg-amber-300" />
+        <span className="relative inline-flex size-2 rounded-full bg-amber-300" />
+      </span>
+      <Clock aria-hidden className="size-3.5 opacity-80" />
+      <span>
+        Demo clock · <time dateTime={new Date(protocolNow * 1000).toISOString()}>{formatDate(protocolNow)}</time>{" "}
+        <span className="text-white/75">({formatClockOffset(offsetSecs)})</span>
+      </span>
+    </>
+  );
+
+  if (variant === "bar") {
+    return (
+      <div className={cn("border-t border-white/15 bg-black/10 dark:bg-white/5", className)} title={title}>
+        <p className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-4 py-1.5 text-xs font-semibold text-white">{content}</p>
+      </div>
+    );
+  }
+  return (
+    <p
+      title={title}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-white ring-1 ring-white/25",
+        className,
+      )}
+    >
+      {content}
+    </p>
+  );
+}
+
+/**
  * "Demo clock · 14 Jan 2027 (+81 days)" (spec §5.7). Shown only while the
  * protocol clock is fast-forwarded (`offsetSecs > 0`); renders nothing on
  * error or 404.
@@ -109,43 +160,14 @@ export function formatClockOffset(offsetSecs: number): string {
 export function DemoClockChip({ placement }: { placement: "inline" | "bar" }) {
   const state = useDemoClock();
   if (!state || state.clock.offsetSecs <= 0) return null;
-
-  const date = formatDate(state.clock.protocolNow);
-  const offset = formatClockOffset(state.clock.offsetSecs);
-  const title = "The protocol clock is fast-forwarded for this demo. Deals, interest and grace periods use this date.";
-
-  const content = (
-    <>
-      <span aria-hidden className="relative flex size-2">
-        <span className="absolute inline-flex size-full animate-live-ring rounded-full bg-amber-300" />
-        <span className="relative inline-flex size-2 rounded-full bg-amber-300" />
-      </span>
-      <Clock aria-hidden className="size-3.5 opacity-80" />
-      <span>
-        Demo clock · <time dateTime={new Date(state.clock.protocolNow * 1000).toISOString()}>{date}</time>{" "}
-        <span className="text-white/75">({offset})</span>
-      </span>
-    </>
-  );
-
-  if (placement === "bar") {
-    return (
-      <div className="border-t border-white/15 bg-black/10 lg:hidden dark:bg-white/5" title={title}>
-        <p className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-4 py-1.5 text-xs font-semibold text-white">
-          {content}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <p
-      title={title}
-      className={cn(
-        "hidden shrink-0 items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-white ring-1 ring-white/25 lg:inline-flex",
-      )}
-    >
-      {content}
-    </p>
+  return placement === "bar" ? (
+    <DemoClockChipView variant="bar" protocolNow={state.clock.protocolNow} offsetSecs={state.clock.offsetSecs} className="lg:hidden" />
+  ) : (
+    <DemoClockChipView
+      variant="chip"
+      protocolNow={state.clock.protocolNow}
+      offsetSecs={state.clock.offsetSecs}
+      className="hidden lg:inline-flex"
+    />
   );
 }

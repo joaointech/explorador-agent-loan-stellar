@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { Logo } from "@/components/brand/logo";
+import { AccountMenu, SignInButton } from "@/components/shell/account-menu";
+import { DemoClockChipView } from "@/components/shell/demo-clock";
 import { Address, TxLink } from "@/components/ui/address";
 import { Amount } from "@/components/ui/amount";
 import { Badge, StatusBadge, type BadgeTone, type StatusKind } from "@/components/ui/badge";
@@ -31,6 +34,7 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
+  ["shell", "Header"],
   ["hero", "Hero"],
   ["tokens", "Tokens"],
   ["type", "Typography"],
@@ -129,6 +133,30 @@ export default function DesignPage() {
       </Section>
 
       <Container>
+        <Showcase
+          id="shell"
+          title="Header states"
+          importPath="@/components/shell/*"
+          description="The real header reads the session (Admin link for admins). Previews: signed out, signed in, and the demo-clock chip shown when the protocol clock is fast-forwarded."
+        >
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-4 rounded-card bg-primary px-4 py-3 text-white dark:bg-slate-900">
+              <Logo markClassName="size-[34px]" />
+              <span className="ml-auto" />
+              <DemoClockChipView variant="chip" protocolNow={SAMPLE_NOW} offsetSecs={81 * 86_400} className="hidden md:inline-flex" />
+              <SignInButton className="hidden sm:inline-flex" />
+            </div>
+            <div className="overflow-visible rounded-card bg-primary text-white dark:bg-slate-900">
+              <div className="flex items-center gap-4 px-4 py-3">
+                <Logo markClassName="size-[34px]" pill={false} />
+                <span className="ml-auto text-sm text-white/80">Signed in as admin</span>
+                <AccountMenu user={{ email: "ana@demo.explorador.pt", role: "ADMIN" }} />
+              </div>
+              <DemoClockChipView variant="bar" protocolNow={SAMPLE_NOW} offsetSecs={81 * 86_400} className="rounded-b-card" />
+            </div>
+          </div>
+        </Showcase>
+
         <Showcase id="hero" title="Hero pattern" importPath="@/components/ui/typography" description="Warm off-white band with the dotted grid, eyebrow, two-tone headline, lead, CTAs ending in →, and glass stat pills.">
           <div className="relative overflow-hidden rounded-panel border border-line bg-section px-5 py-10 sm:px-10 sm:py-14">
             <div aria-hidden className="bg-dot-grid pointer-events-none absolute inset-0 opacity-60" />

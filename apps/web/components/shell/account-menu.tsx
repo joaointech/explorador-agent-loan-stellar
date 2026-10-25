@@ -33,7 +33,7 @@ export function SignInButton({ className }: { className?: string }) {
     <Link
       href={SIGN_IN_HREF}
       className={cn(
-        "inline-flex h-10 items-center justify-center rounded-xl bg-white/15 px-5 text-sm font-semibold text-white transition-colors hover:bg-white/25",
+        "inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-white/15 px-5 text-sm font-semibold whitespace-nowrap text-white transition-colors hover:bg-white/25",
         className,
       )}
     >

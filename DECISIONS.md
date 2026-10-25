@@ -33,6 +33,10 @@ Choices made where `spec.md` was silent, or where the product owner gave new dir
 
 ## Auth and database
 
+- 2026-10-25: Initial migration `init` is generated from `schema.prisma` (spec §9.1) plus one additive column, `EmailCode.createdAt`, which drives the per-email resend cooldown and hourly cap from Postgres (works across serverless instances, unlike an in-memory limiter).
+- 2026-10-25: `lib/db` creates the Prisma client lazily on first property access (a Proxy over the singleton), so importing it never reads env. Scripts import it through `@/lib/db` (verified with `tsx --tsconfig scripts/tsconfig.json`); they should run with `tsx --env-file=../apps/web/.env.local` (or call `process.loadEnvFile` before the first query) and end with `db.$disconnect()`.
+- 2026-10-25: Prisma 7's `migrate dev` does not regenerate the client: run `pnpm --filter web db:generate` after creating a migration. `pnpm --filter web db:reset` = `prisma migrate reset --force`, for dev databases only (Prisma refuses to run it for an AI agent without the user's consent).
+
 ## Stellar service and indexer
 
 ## Smart accounts (agent passkey wallet)

@@ -2,8 +2,10 @@
 // contracts; Postgres holds history (indexed events), auth, cards and the
 // encrypted CPCV PII.
 //
-// Generator/datasource: finalize for Prisma 7 (prisma.config.ts + driver
-// adapter) when wiring lib/db.
+// Prisma 7: the datasource URL lives in prisma.config.ts (not here), the
+// client is generated into lib/generated/prisma, and lib/db connects through
+// the @prisma/adapter-pg driver adapter (local Postgres and Neon alike).
+// Schema changes must be additive: other workstreams build against it.
 
 generator client {
   provider = "prisma-client"
@@ -53,11 +55,12 @@ model User {
 
 model EmailCode {
   id         String    @id @default(cuid())
-  email      String
-  codeHash   String
+  email      String // normalized: trimmed, lowercase
+  codeHash   String // HMAC-SHA256(SESSION_SECRET, email + code), hex; never the code itself
   expiresAt  DateTime
-  consumedAt DateTime?
+  consumedAt DateTime? // set on successful verify, or when a newer code supersedes this one
   attempts   Int       @default(0)
+  createdAt  DateTime  @default(now()) // resend cooldown and hourly cap per email
 
   @@index([email])
 }

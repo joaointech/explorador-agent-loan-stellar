@@ -6,8 +6,7 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { env } from "@/lib/env";
 
 import { NotConfiguredError } from "./errors";
-
-export const EXPLORER_BASE = "https://stellar.expert/explorer/testnet";
+import { EXPLORER_BASE } from "./explorer";
 
 export interface NetworkConfig {
   network: "testnet";

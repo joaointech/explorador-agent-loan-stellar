@@ -91,7 +91,8 @@ async function fromFile(): Promise<ResolvedDeployment | null> {
   for (const file of deploymentFileCandidates()) {
     let raw: string;
     try {
-      raw = await readFile(file, "utf8");
+      // Not traced into serverless bundles: on Vercel the Deployment row is the source of truth.
+      raw = await readFile(/* turbopackIgnore: true */ file, "utf8");
     } catch {
       continue;
     }

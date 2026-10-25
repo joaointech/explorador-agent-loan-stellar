@@ -160,7 +160,5 @@ export async function faucetTeurc(to: string, amount: bigint): Promise<InvokeRes
   return invokeAsOperator("teurc", "faucet", [scAddress(to), scI128(positive(amount, "amount"))]);
 }
 
-/** https://stellar.expert/explorer/testnet/{tx|contract|account}/{id} */
-export function explorerUrl(kind: "tx" | "contract" | "account", id: string): string {
-  return `https://stellar.expert/explorer/testnet/${kind}/${id}`;
-}
+/** https://stellar.expert/explorer/testnet/{tx|contract|account}/{id} (client components: import from lib/stellar/explorer). */
+export { explorerUrl } from "./explorer";

@@ -12,8 +12,9 @@ doctest = false
 [dependencies]
 soroban-sdk = { workspace = true }
 stellar-tokens = { workspace = true }
-stellar-macros = { workspace = true }
 advance-shared = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+# Tests run against the real tEURC contract.
+teurc = { path = "../teurc" }

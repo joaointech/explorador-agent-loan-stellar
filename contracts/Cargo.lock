@@ -15,8 +15,8 @@ version = "0.1.0"
 dependencies = [
  "advance-shared",
  "soroban-sdk",
- "stellar-macros",
  "stellar-tokens",
+ "teurc",
 ]
 
 [[package]]

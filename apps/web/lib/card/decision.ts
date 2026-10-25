@@ -110,8 +110,8 @@ export function decideAuthorization(input: DecisionInput): Decision {
   // Credits and anything new: approve and record, no on-chain action (spec §9.5).
   if (kind === "other") return { result: "APPROVED", record: true, draw: false, spendable: 0n };
 
-  // The DB flag mirrors enable_card; a live read that says otherwise wins.
-  const enabled = agent.cardEnabledOnChain && !(position?.source === "chain" && !position.cardEnabled);
+  // A live read's card_enabled is authoritative; Agent.cardEnabledOnChain (its DB mirror) decides only without one.
+  const enabled = position?.source === "chain" ? position.cardEnabled : agent.cardEnabledOnChain;
   const spendable = position ? computeSpendable(position, stats, pendingHolds) : 0n;
 
   if (kind === "balance_inquiry") {

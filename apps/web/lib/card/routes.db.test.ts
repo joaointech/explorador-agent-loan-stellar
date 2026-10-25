@@ -122,6 +122,7 @@ describe.skipIf(!hasTestDb)("card API routes on the simulated network (test data
 
     it("declines with CARD_PAUSED until the card is enabled on-chain", async () => {
       const agent = await agents.create({ cardEnabledOnChain: false });
+      chain.readAgentPosition.mockResolvedValue(chainPosition({ cardEnabled: false }));
       signedIn(agent);
       const res = await simulate(post("/api/agent/card/simulate", { amountEur: 62, merchant: "Galp fuel" }));
       expect(await res.json()).toMatchObject({ decision: "DECLINED", declineReason: "CARD_PAUSED" });

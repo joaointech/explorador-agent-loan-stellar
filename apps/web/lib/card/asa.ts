@@ -3,11 +3,13 @@
 // network: same decision, same CardAuthorization row, same async card_draw.
 //
 // 1. idempotency: a known transaction token returns the stored decision
-// 2. unknown card → SUSPECTED_FRAUD; card not enabled on-chain → CARD_PAUSED
+// 2. unknown card → SUSPECTED_FRAUD
 // 3. live position + stats (1.2 s budget) or the cached position
-// 4. under a row lock on the agent: pending holds, decision, insert
-// 5. the caller responds and runs `followUp` after the response (`after()`):
-//    card_draw for approved spends, cache refresh otherwise
+// 4. card not enabled on-chain → CARD_PAUSED (live card_enabled, else the
+//    Agent.cardEnabledOnChain mirror)
+// 5. under a row lock on the agent: pending holds, decision, insert
+// 6. the caller responds and runs `followUp` after the response (`after()`):
+//    card_draw for approved spends, then cache/mirror sync from the live read
 
 import { db, Prisma, type CardAuthorization } from "@/lib/db";
 import { asaAmountCents, asaMerchant, isAsaResult, type AsaRequest, type AsaResponse, type AsaResult } from "@/lib/lithic/asa";
@@ -15,7 +17,7 @@ import { stroopsToEur } from "@/lib/units";
 
 import { classifyStatus, decideAuthorization, sumPendingHolds, type Decision, type PositionSnapshot } from "./decision";
 import { executeDraw } from "./draw";
-import { loadDecisionState, writeCachedPosition, type DecisionState } from "./position";
+import { loadDecisionState, syncAgentFromChain, type DecisionState } from "./position";
 
 export interface AsaOutcome {
   /** Body for Lithic (HTTP 200). */
@@ -87,9 +89,8 @@ export async function processAsaRequest(req: AsaRequest): Promise<AsaOutcome> {
     return { response: { result: "SUSPECTED_FRAUD", token: req.token }, authorizationId: null, decision: null, declineReason: null, followUp: null };
   }
 
-  // Skip the RPC reads when the answer cannot depend on them (paused card, zero amount, credits).
-  const needsPosition =
-    agent.cardEnabledOnChain && (kind === "balance_inquiry" || (kind === "purchase" && amountCents > 0n));
+  // Skip the RPC reads when the answer cannot depend on them (zero amounts, credits).
+  const needsPosition = kind === "balance_inquiry" || (kind === "purchase" && amountCents > 0n);
   const state: DecisionState | null = needsPosition ? await loadDecisionState(agent) : null;
   const position = state?.position ?? null;
 
@@ -149,13 +150,16 @@ export async function processAsaRequest(req: AsaRequest): Promise<AsaOutcome> {
   );
   if (elapsed > 1_500) console.warn(`${LOG} ${req.token} decision took ${elapsed} ms (Lithic budget: respond < 2 s)`);
 
+  // Draw first (the UI waits on it), then keep the cache and the card_enabled mirror current.
   const live = state?.live ?? null;
-  const followUp =
-    row && decision.draw
-      ? drawFollowUp(row.id)
-      : live && state
-        ? safely("cachedPosition refresh", () => writeCachedPosition(agent.userId, live, state.readStartedAt))
-        : null;
+  const tasks: (() => Promise<void>)[] = [];
+  if (row && decision.draw) tasks.push(drawFollowUp(row.id));
+  if (live && state) tasks.push(safely("agent sync", () => syncAgentFromChain(agent, live, state.readStartedAt)));
+  const followUp = tasks.length
+    ? async () => {
+        for (const task of tasks) await task();
+      }
+    : null;
 
   const response: AsaResponse = { result: decision.result, token: req.token };
   if (decision.balance) response.balance = decision.balance;

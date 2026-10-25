@@ -119,6 +119,18 @@ export async function writeCachedPosition(userId: string, position: AgentPositio
   });
 }
 
+/** After a live read: cache it, and fix Agent.cardEnabledOnChain if it disagrees with the chain. */
+export async function syncAgentFromChain(
+  agent: { userId: string; cardEnabledOnChain: boolean },
+  live: AgentPosition,
+  readStartedAt: Date,
+): Promise<void> {
+  await writeCachedPosition(agent.userId, live, readStartedAt);
+  if (live.cardEnabled !== agent.cardEnabledOnChain) {
+    await db.agent.update({ where: { userId: agent.userId }, data: { cardEnabledOnChain: live.cardEnabled } });
+  }
+}
+
 /** Re-reads the agent's position and caches it (after a draw). */
 export async function refreshCachedPosition(agent: { userId: string; smartAccount: string }): Promise<void> {
   const readStartedAt = new Date();

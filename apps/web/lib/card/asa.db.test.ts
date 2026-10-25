@@ -150,18 +150,38 @@ describe.skipIf(!hasTestDb)("ASA handler pipeline (test database)", () => {
     expect((await processAsaRequest(asa(agent, 500n))).response.result).toBe("APPROVED");
   });
 
-  it("declines CARD_PAUSED without reading the chain when the card is not enabled", async () => {
+  it("declines CARD_PAUSED when the card is not enabled on-chain", async () => {
     const agent = await agents.create({ cardEnabledOnChain: false });
+    chain.readAgentPosition.mockResolvedValue(chainPosition({ cardEnabled: false }));
     const outcome = await processAsaRequest(asa(agent, 480n));
     expect(outcome.response.result).toBe("CARD_PAUSED");
-    expect(outcome.followUp).toBeNull();
-    expect(chain.readAgentPosition).not.toHaveBeenCalled();
     expect((await rowsOf(agent))[0]).toMatchObject({ decision: "DECLINED", declineReason: "CARD_PAUSED" });
+    await outcome.followUp!(); // cache refresh only
+    expect(chain.cardDraw).not.toHaveBeenCalled();
   });
 
-  it("declines CARD_PAUSED when the live position says the card is disabled", async () => {
-    const agent = await agents.create();
+  it("declines CARD_PAUSED when the chain says disabled, and corrects a stale mirror", async () => {
+    const agent = await agents.create({ cardEnabledOnChain: true });
     chain.readAgentPosition.mockResolvedValue(chainPosition({ cardEnabled: false }));
+    const outcome = await processAsaRequest(asa(agent, 480n));
+    expect(outcome.response.result).toBe("CARD_PAUSED");
+    await outcome.followUp!();
+    expect((await db.agent.findUniqueOrThrow({ where: { userId: agent.userId } })).cardEnabledOnChain).toBe(false);
+  });
+
+  it("follows the chain when the mirror lags behind enable_card, and corrects it", async () => {
+    const agent = await agents.create({ cardEnabledOnChain: false });
+    const outcome = await processAsaRequest(asa(agent, 480n)); // chain mock: card enabled
+    expect(outcome.response.result).toBe("APPROVED");
+    await outcome.followUp!();
+    expect(chain.cardDraw).toHaveBeenCalledTimes(1);
+    expect((await db.agent.findUniqueOrThrow({ where: { userId: agent.userId } })).cardEnabledOnChain).toBe(true);
+  });
+
+  it("without a live read, a disabled mirror declines CARD_PAUSED", async () => {
+    const agent = await agents.create({ cardEnabledOnChain: false });
+    await db.agent.update({ where: { userId: agent.userId }, data: { cachedPosition: jsonify(chainPosition()), cachedAt: new Date() } });
+    chain.readAgentPosition.mockRejectedValue(new Error("RPC unavailable"));
     expect((await processAsaRequest(asa(agent, 480n))).response.result).toBe("CARD_PAUSED");
   });
 

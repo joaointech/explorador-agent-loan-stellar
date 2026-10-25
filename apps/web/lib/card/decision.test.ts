@@ -71,19 +71,23 @@ describe("decideAuthorization", () => {
     expect(d.spendable).toBe(5_000n * EUR);
   });
 
-  it("declines CARD_PAUSED when the card is not enabled on-chain (DB flag)", () => {
-    const d = decideAuthorization(input({ agent: { cardEnabledOnChain: false } }));
+  it("declines CARD_PAUSED when a live read says the card is not enabled on-chain", () => {
+    const d = decideAuthorization(input({ position: position({ cardEnabled: false }) }));
     expect(d).toMatchObject({ result: "CARD_PAUSED", record: true, draw: false });
   });
 
-  it("declines CARD_PAUSED when a live read says the card is disabled", () => {
-    const d = decideAuthorization(input({ position: position({ cardEnabled: false }) }));
-    expect(d.result).toBe("CARD_PAUSED");
+  it("follows a live read when the Agent.cardEnabledOnChain mirror lags behind", () => {
+    const d = decideAuthorization(input({ agent: { cardEnabledOnChain: false }, position: position({ cardEnabled: true }) }));
+    expect(d.result).toBe("APPROVED");
   });
 
-  it("trusts the DB flag over a cached position's cardEnabled", () => {
-    const d = decideAuthorization(input({ position: position({ cardEnabled: false, source: "cache", cachedAt: new Date() }) }));
-    expect(d.result).toBe("APPROVED");
+  it("without a live read, the mirror decides", () => {
+    const cached = position({ cardEnabled: true, source: "cache", cachedAt: new Date() });
+    expect(decideAuthorization(input({ agent: { cardEnabledOnChain: false }, position: cached })).result).toBe("CARD_PAUSED");
+    expect(decideAuthorization(input({ agent: { cardEnabledOnChain: false }, position: null })).result).toBe("CARD_PAUSED");
+    // …and wins over a cached position's own card_enabled.
+    const stale = position({ cardEnabled: false, source: "cache", cachedAt: new Date() });
+    expect(decideAuthorization(input({ position: stale })).result).toBe("APPROVED");
   });
 
   it("declines SUSPECTED_FRAUD for an unknown card, without recording", () => {
@@ -106,7 +110,7 @@ describe("decideAuthorization", () => {
   });
 
   it("reports a zero balance for a paused card", () => {
-    const d = decideAuthorization(input({ kind: "balance_inquiry", agent: { cardEnabledOnChain: false } }));
+    const d = decideAuthorization(input({ kind: "balance_inquiry", position: position({ cardEnabled: false }) }));
     expect(d.balance).toEqual({ amount: 0, available: 0 });
   });
 

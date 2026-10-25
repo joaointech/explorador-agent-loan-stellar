@@ -17,7 +17,7 @@ export function HeroVisual({ className }: { className?: string }) {
       <div className="pointer-events-none absolute -inset-10 rounded-full bg-primary/10 blur-3xl dark:bg-primary/20" />
 
       {/* Proof chip */}
-      <div className="relative z-10 mr-[-12px] mb-[-18px] ml-auto flex w-fit items-center gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-pop backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
+      <div className="relative z-10 mb-[-18px] ml-auto flex w-fit xl:-mr-3 items-center gap-3 rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-pop backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/80">
         <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-600/15 dark:bg-emerald-500/15 dark:text-emerald-300">
           <ShieldCheck className="size-5" />
         </span>
@@ -59,7 +59,7 @@ export function HeroVisual({ className }: { className?: string }) {
       </div>
 
       {/* First purchase */}
-      <div className="relative z-10 mt-[-22px] ml-[-18px] flex w-fit items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 shadow-pop">
+      <div className="relative z-10 mt-[-22px] -ml-2 flex w-fit xl:-ml-5 items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 shadow-pop">
         <span className="flex size-9 items-center justify-center rounded-xl bg-primary-tint text-primary-text ring-1 ring-primary/15">
           <Store className="size-5" />
         </span>

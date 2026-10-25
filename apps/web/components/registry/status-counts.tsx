@@ -14,14 +14,14 @@ const ITEMS: { key: RegistryStatus | "total"; label: string; dot: string }[] = [
 
 /**
  * Registry header: how many notes exist in each status (spec §10.2). Stat
- * pills from sm up; one compact glass card on phones.
+ * pills from lg up; one compact glass card on phones and tablets.
  */
 export function StatusCounts({ counts, loading = false, className }: { counts: Counts | null; loading?: boolean; className?: string }) {
   const value = (key: RegistryStatus | "total") => (counts ? formatNumber(counts[key] ?? 0) : EMPTY_VALUE);
   return (
     <div className={className} aria-busy={loading || undefined}>
       <h2 className="sr-only">Notes by status</h2>
-      <ul className="hidden grid-cols-5 gap-3 sm:grid">
+      <ul className="hidden grid-cols-5 gap-3 lg:grid">
         {ITEMS.map((item) => (
           <li key={item.key} className="min-w-0">
             <StatPill
@@ -35,7 +35,7 @@ export function StatusCounts({ counts, loading = false, className }: { counts: C
           </li>
         ))}
       </ul>
-      <ul className="grid grid-cols-3 gap-x-3 gap-y-3 rounded-card border border-slate-200/70 bg-white/60 px-4 py-3.5 shadow-pill backdrop-blur-sm sm:hidden dark:border-slate-700 dark:bg-slate-800/60">
+      <ul className="grid grid-cols-3 gap-x-3 gap-y-3 rounded-card border border-slate-200/70 bg-white/60 px-4 py-3.5 shadow-pill backdrop-blur-sm md:grid-cols-5 md:px-6 lg:hidden dark:border-slate-700 dark:bg-slate-800/60">
         {ITEMS.map((item) => (
           <li key={item.key} className="flex min-w-0 flex-col">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold text-muted">

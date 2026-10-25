@@ -62,7 +62,7 @@ function NotesTable({ notes, caption }: { notes: RegistryNote[]; caption: string
             <TableHead className="px-3">Escritura</TableHead>
             <TableHead className="px-3">Status</TableHead>
             <TableHead className="hidden px-3 lg:table-cell">Minted</TableHead>
-            <TableHead className="w-10 px-3 pr-5">
+            <TableHead className="hidden w-10 px-3 pr-5 lg:table-cell">
               <span className="sr-only">Details</span>
             </TableHead>
           </TableRow>
@@ -94,7 +94,7 @@ function NotesTable({ notes, caption }: { notes: RegistryNote[]; caption: string
               <TableCell className="hidden px-3 lg:table-cell">
                 <Minted note={n} stacked />
               </TableCell>
-              <TableCell className="px-3 pr-5" align="right">
+              <TableCell className="hidden px-3 pr-5 lg:table-cell" align="right">
                 <Link
                   href={noteHref(n.id)}
                   aria-label={`Note #${n.id} details`}

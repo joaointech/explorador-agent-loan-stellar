@@ -2,6 +2,7 @@
 
 import { discardEmailCode, EMAIL_CODE, issueEmailCode } from "@/lib/auth/email-code";
 import { clientIp, enforceRateLimit } from "@/lib/auth/rate-limit";
+import { assertJsonRequest } from "@/lib/auth/request";
 import { emailStartBody } from "@/lib/auth/schemas";
 import { isDemoEmail } from "@/lib/auth/users";
 import { db } from "@/lib/db";
@@ -16,6 +17,7 @@ const TEN_MINUTES = 10 * 60 * 1000;
 
 export const POST = route(async (req: Request) => {
   enforceRateLimit(`email-start:${clientIp(req)}`, 20, TEN_MINUTES, "sign-in requests");
+  assertJsonRequest(req);
   const { email } = await parseBody(req, emailStartBody);
 
   // Seed agents (@demo.explorador.pt) have no inbox: in DEMO_MODE their code

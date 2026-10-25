@@ -126,4 +126,7 @@ export async function verifyEmailCode(email: string, code: string, opts: { now?:
     data: { consumedAt: now },
   });
   if (consumed.count === 0) throw badRequest("This code has already been used. Request a new one.", "CODE_USED");
+
+  // Retire any sibling left live by two near-simultaneous requests for a code.
+  await db.emailCode.updateMany({ where: { email, consumedAt: null }, data: { consumedAt: now } });
 }

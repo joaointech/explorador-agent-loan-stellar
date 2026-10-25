@@ -85,6 +85,19 @@ describe("POST /api/auth/email/start", () => {
     expect((await start(post("{"))).status).toBe(400);
   });
 
+  it("only accepts JSON bodies (no cross-site text/plain form posts)", async () => {
+    const formPost = (url: string, body: unknown) =>
+      new Request(url, { method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify(body) });
+    const res = await start(formPost("http://localhost:3104/api/auth/email/start", { email: "ana@example.com" }));
+    expect(res.status).toBe(415);
+    expect(await res.json()).toMatchObject({ error: { code: "UNSUPPORTED_MEDIA_TYPE" } });
+    const verifyRes = await verify(
+      formPost("http://localhost:3104/api/auth/email/verify", { email: "ana@example.com", code: "123456" }),
+    );
+    expect(verifyRes.status).toBe(415);
+    expect(state.sent).toHaveLength(0);
+  });
+
   it("rate-limits per email (cooldown) and per IP", async () => {
     await start(post({ email: "ana@example.com" }));
     const again = await start(post({ email: "ana@example.com" }));

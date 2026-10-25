@@ -133,6 +133,23 @@ describe("verifyEmailCode", () => {
     await expectHttpError(verifyEmailCode("bruno@example.com", code, { now: at(MIN) }), 400, "INVALID_CODE");
   });
 
+  it("retires every live code for the email on success (two codes raced into existence)", async () => {
+    const { code } = await issueEmailCode(EMAIL, { now: T0 });
+    // Simulate a concurrent request whose supersede step didn't see the first code.
+    fakeDb.emailCode.rows.unshift({
+      id: "racer",
+      email: EMAIL,
+      codeHash: hashEmailCode(EMAIL, "999999"),
+      expiresAt: at(10 * MIN),
+      consumedAt: null,
+      attempts: 0,
+      createdAt: at(-1),
+    });
+    await expect(verifyEmailCode(EMAIL, code, { now: at(MIN) })).resolves.toBeUndefined();
+    expect(fakeDb.emailCode.rows.every((r) => r.consumedAt !== null)).toBe(true);
+    await expectHttpError(verifyEmailCode(EMAIL, "999999", { now: at(MIN) }), 400, "CODE_NOT_FOUND");
+  });
+
   it("reports a missing code", async () => {
     await expectHttpError(verifyEmailCode(EMAIL, "123456", { now: T0 }), 400, "CODE_NOT_FOUND");
   });

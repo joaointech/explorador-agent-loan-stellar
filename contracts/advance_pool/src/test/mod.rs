@@ -4,6 +4,7 @@ extern crate std;
 
 mod clock;
 mod credit;
+mod fuzz;
 mod outcomes;
 mod vault;
 mod worked_example;

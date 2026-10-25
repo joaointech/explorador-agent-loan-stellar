@@ -187,7 +187,7 @@ export function LoginForm({ next }: { next?: string }) {
 
       {sent?.delivery === "console" && (
         <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-600/15 dark:bg-amber-500/10 dark:text-amber-200">
-          No email was sent (no <code className="font-mono text-xs">RESEND_API_KEY</code>, or a seeded demo address): the code is printed in the server console.
+          No email was sent (no email provider configured, or a seeded demo admin): the code is printed in the server console.
         </p>
       )}
       {sent?.delivery === "demo" && sent.demoCode && (

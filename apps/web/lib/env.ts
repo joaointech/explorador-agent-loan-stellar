@@ -22,6 +22,16 @@ const schema = z.object({
         .map((e) => e.trim().toLowerCase())
         .filter(Boolean),
     ),
+  /** Brevo transactional email (the provider explorador.pt uses); preferred over Resend when set. */
+  BREVO_API_KEY: optional,
+  /** Must be a sender on a domain authenticated in Brevo (e.g. joaointech@explorador.pt). Falls back to EMAIL_FROM's address. */
+  BREVO_SENDER_EMAIL: optional,
+  BREVO_SENDER_NAME: z.string().default("explorador advance"),
+  /** "true": Brevo validates requests but drops the emails (X-Sib-Sandbox: drop). */
+  BREVO_SANDBOX: z
+    .string()
+    .optional()
+    .transform((v) => v?.trim() === "true"),
   RESEND_API_KEY: optional,
   EMAIL_FROM: z.string().default("explorador advance <advance@explorador.ai>"),
   WEBAUTHN_RP_ID: z.string().default("localhost"),

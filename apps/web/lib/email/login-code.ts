@@ -42,10 +42,10 @@ export function loginCodeEmail(to: string, code: string, ttlMinutes: number): Em
   </body>
 </html>`;
 
-  return { to, subject, text, html };
+  return { to, subject, text, html, tags: ["explorador-advance-login"] };
 }
 
-/** Emails a sign-in code (or prints it to the server console when Resend isn't configured). */
+/** Emails a sign-in code (or prints it to the server console when no email provider is configured). */
 export function sendLoginCode(to: string, code: string, ttlMinutes: number): Promise<EmailDelivery> {
   return sendEmail(loginCodeEmail(to, code, ttlMinutes));
 }

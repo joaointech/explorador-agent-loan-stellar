@@ -196,7 +196,7 @@ Agent smart accounts use the OpenZeppelin contracts that smart-account-kit 0.8.0
 | Docker | with Compose | Postgres 16 for local development. |
 | circom | 2.2.3 | Only to rebuild the circuit; the artifacts are committed. snarkjs comes from the workspace. |
 
-For the demo flows you also want the [Freighter](https://www.freighter.app) extension set to **Testnet**. A Lithic sandbox key, `cloudflared` or `ngrok`, and a Resend API key are optional.
+For the demo flows you also want the [Freighter](https://www.freighter.app) extension set to **Testnet**. A Lithic sandbox key, `cloudflared` or `ngrok`, and an email provider key (Brevo, the account explorador.pt uses, or Resend) are optional.
 
 ## Setup from a fresh clone
 
@@ -229,8 +229,8 @@ Everyone signs in at `/login` with an email and a 6-digit code (with a passkey o
 | Who | How |
 |---|---|
 | Seed agents | `ana@demo.explorador.pt` (Ana Costa), `bruno@demo.explorador.pt` (Bruno Ferreira), `carla@demo.explorador.pt` (Carla Mendes). Demo accounts have no inbox: while `DEMO_MODE=true` their code is shown on the login page ("Use it"). Their smart accounts use a server-held Ed25519 demo signer, so they never see a passkey prompt. |
-| Admin | The first address in `ADMIN_EMAILS`, created by the seed. `keys:generate` defaults to `admin@demo.explorador.pt`. That account has no inbox, and its code is shown on the login page only with `DEMO_ADMIN_SIGNIN=true`; otherwise it is printed in the server console (the `pnpm dev` output, or the Vercel logs). On a public deployment, use a real address and Resend. |
-| New agents | Any other email. The code goes out through Resend, or to the server console when `RESEND_API_KEY` is unset. Then: create one passkey → the sponsor deploys the agent's smart account and a card is issued → **Activate card** (one passkey prompt authorizes `enable_card`). |
+| Admin | The first address in `ADMIN_EMAILS`, created by the seed. `keys:generate` defaults to `admin@demo.explorador.pt`. That account has no inbox, and its code is shown on the login page only with `DEMO_ADMIN_SIGNIN=true`; otherwise it is printed in the server console (the `pnpm dev` output, or the Vercel logs). On a public deployment, use a real address and a configured email provider (Brevo). |
+| New agents | Any other email. The code goes out through Brevo (`BREVO_API_KEY`, sender `BREVO_SENDER_EMAIL` on a Brevo-authenticated domain such as `joaointech@explorador.pt`), else Resend (`RESEND_API_KEY`), else it is printed in the server console. Then: create one passkey → the sponsor deploys the agent's smart account and a card is issued → **Activate card** (one passkey prompt authorizes `enable_card`). |
 
 > **Demo-mode caveat.** While `DEMO_MODE=true`, anyone who knows a seed agent's address can sign in as that agent. The damage is limited to spending testnet credit. `DEMO_ADMIN_SIGNIN=true` goes much further: it lets anyone sign in as the demo admin, who can read decrypted CPCV data, mint, settle, cancel and write off, move treasury funds, fast-forward the protocol clock and reset the demo. Use it only for a private demo, never on a public deployment. `DEMO_MODE=false` turns off seed sign-in, the demo clock and Reset demo.
 
@@ -260,7 +260,7 @@ Lithic sandbox amounts are USD cents, which the app treats as EUR cents 1:1 (spe
    - `DATABASE_URL` = the Neon pooled URL
    - `APP_URL=https://advance.explorador.ai`
    - `WEBAUTHN_RP_ID=advance.explorador.ai`
-   - `RESEND_API_KEY` and an `EMAIL_FROM` on a domain verified in Resend
+   - `BREVO_API_KEY` + `BREVO_SENDER_EMAIL` (explorador.pt is authenticated in that Brevo account), or `RESEND_API_KEY` + an `EMAIL_FROM` on a domain verified in Resend
    - `CRON_SECRET`: Vercel sends it as `Authorization: Bearer …` to cron routes
    - `LITHIC_*` if you use Lithic
 

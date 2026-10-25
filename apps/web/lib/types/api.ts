@@ -68,7 +68,7 @@ export interface EmailStartResponse {
   /** Wait this long before asking for another code. */
   resendAfterSecs: number;
   /**
-   * "email" = sent with Resend; "console" = code printed in the server log (RESEND_API_KEY unset, or a
+   * "email" = sent with Brevo or Resend; "console" = code printed in the server log (no provider key, or a
    * seeded demo admin without DEMO_ADMIN_SIGNIN); "demo" = seeded demo account in DEMO_MODE, code in `demoCode`.
    */
   delivery: "email" | "console" | "demo";

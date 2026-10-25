@@ -44,7 +44,7 @@ export const POST = route(async (req: Request) => {
   } else {
     try {
       const sent = await sendLoginCode(email, issued.code, EMAIL_CODE.ttlMs / 60_000);
-      delivery = sent.via === "resend" ? "email" : "console";
+      delivery = sent.via === "console" ? "console" : "email";
     } catch (err) {
       await discardEmailCode(issued.id);
       if (err instanceof EmailError) {

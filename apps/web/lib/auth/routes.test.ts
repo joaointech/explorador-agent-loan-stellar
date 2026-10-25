@@ -9,6 +9,7 @@ vi.hoisted(() => {
   process.env.DEMO_MODE = "true";
   delete process.env.DEMO_ADMIN_SIGNIN;
   delete process.env.RESEND_API_KEY;
+  delete process.env.BREVO_API_KEY;
 });
 
 const state = vi.hoisted(() => ({

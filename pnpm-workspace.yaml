@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+  - circuits
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  prisma: true
+  blake-hash: true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true

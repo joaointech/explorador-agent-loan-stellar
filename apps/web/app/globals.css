@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+/* next-themes toggles the `dark` class on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * explorador.pt design tokens (§10.1). Sampled from explorador.pt:
+ * primary #2563eb, text #0f172a, muted #64748b, hero bg = Tailwind stone-50 (#fafaf9)
+ * with a faint blue dot grid, dark bg #0b1120, dark cards #111a2e, dark borders #24324a.
+ */
+:root {
+  --page: #ffffff;
+  --warm: #fafaf9;
+  --surface: #ffffff;
+  --surface-glass: rgb(255 255 255 / 0.6);
+  --ink: #0f172a;
+  --ink-soft: #334155;
+  --muted: #64748b;
+  --line: rgb(226 232 240 / 0.7);
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-soft: #dbeafe;
+  --primary-faint: #eff6ff;
+  --nav: #2563eb;
+  --footer: rgb(37 99 235 / 0.9);
+  color-scheme: light;
+}
+
+.dark {
+  --page: #0b1120;
+  --warm: #0e1627;
+  --surface: #111a2e;
+  --surface-glass: rgb(17 26 46 / 0.6);
+  --ink: #e5ecf5;
+  --ink-soft: #cbd5e1;
+  --muted: #94a3b8;
+  --line: #24324a;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-soft: rgb(59 130 246 / 0.18);
+  --primary-faint: rgb(59 130 246 / 0.08);
+  --nav: #0f172a;
+  --footer: #0f172a;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  --font-pixel: var(--font-pixelify), var(--font-sora), ui-sans-serif, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --color-page: var(--page);
+  --color-warm: var(--warm);
+  --color-surface: var(--surface);
+  --color-glass: var(--surface-glass);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-faint: var(--primary-faint);
+  --color-nav: var(--nav);
+  --color-footer: var(--footer);
+}
+
+@theme {
+  --animate-fade-in-up: fade-in-up 0.4s ease-out both;
+  @keyframes fade-in-up {
+    0% {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+  ::selection {
+    background: var(--primary-soft);
+  }
+  /* Lucide icons at 1.5px stroke (§10.1). */
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+}
+
+@layer components {
+  /* Hero background: warm off-white with explorador's faint dot grid. */
+  .dot-grid {
+    background-image: radial-gradient(circle, rgb(37 99 235 / 0.08) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 40%, transparent 90%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 40%, transparent 90%);
+  }
+  .eyebrow {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+  }
+  .h1 {
+    font-size: 40px;
+    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .h2 {
+    font-size: 32px;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -1.1px;
+  }
+  .h3 {
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+  @media (min-width: 768px) {
+    .h1 {
+      font-size: 60px;
+    }
+    .h2 {
+      font-size: 44px;
+    }
+  }
+  /* The white explorador logo, recoloured with currentColor where it sits on light backgrounds. */
+  .logo-mask {
+    background-color: currentColor;
+    mask: url("/logo.svg") center / contain no-repeat;
+    -webkit-mask: url("/logo.svg") center / contain no-repeat;
+  }
+}
+
+/* Chart series colours (validated with the dataviz palette checker against each surface). */
+:root {
+  --chart-1: #2563eb;
+  --chart-2: #d97706;
+  --chart-grid: rgb(100 116 139 / 0.18);
+}
+.dark {
+  --chart-1: #3b82f6;
+  --chart-2: #d97706;
+  --chart-grid: rgb(148 163 184 / 0.14);
+}

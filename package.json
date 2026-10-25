@@ -1,0 +1,31 @@
+{
+  "name": "explorador-advance",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "circuits:build": "pnpm --filter @advance/circuits build",
+    "circuits:test": "pnpm --filter @advance/circuits test",
+    "contracts:build": "cd contracts && stellar contract build",
+    "contracts:test": "cd contracts && cargo test",
+    "keys:generate": "tsx --tsconfig apps/web/tsconfig.json scripts/keys-generate.ts",
+    "deploy:testnet": "tsx --tsconfig apps/web/tsconfig.json scripts/deploy.ts",
+    "seed": "tsx --tsconfig apps/web/tsconfig.json scripts/seed.ts",
+    "demo:reset": "tsx --tsconfig apps/web/tsconfig.json scripts/demo-reset.ts",
+    "lithic:enroll": "tsx --tsconfig apps/web/tsconfig.json scripts/lithic-enroll.ts",
+    "indexer": "tsx --tsconfig apps/web/tsconfig.json scripts/indexer.ts",
+    "e2e": "tsx --tsconfig apps/web/tsconfig.json scripts/e2e.ts",
+    "test": "pnpm --filter web test && pnpm circuits:test",
+    "db:migrate": "pnpm --filter web exec prisma migrate dev",
+    "db:push": "pnpm --filter web exec prisma db push"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

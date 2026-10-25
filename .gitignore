@@ -1,0 +1,14 @@
+node_modules/
+.next/
+target/
+*.env
+.env.local
+.env*.local
+!.env.example
+.DS_Store
+circuits/build/
+circuits/ptau/
+*.tsbuildinfo
+apps/web/lib/generated/
+test_snapshots/
+.vercel

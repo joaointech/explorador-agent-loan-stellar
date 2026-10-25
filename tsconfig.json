@@ -1,0 +1,11 @@
+{
+  "extends": "./apps/web/tsconfig.json",
+  "compilerOptions": {
+    "paths": { "@/*": ["./apps/web/*"] },
+    "incremental": false,
+    "plugins": [],
+    "types": ["node"],
+    "typeRoots": ["./apps/web/node_modules/@types"]
+  },
+  "include": ["scripts/**/*.ts"]
+}

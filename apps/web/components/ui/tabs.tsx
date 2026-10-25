@@ -131,7 +131,8 @@ export function TabsTrigger({
       id={tabId(baseId, value)}
       aria-selected={active}
       aria-controls={panelId(baseId, value)}
-      tabIndex={active ? 0 : -1}
+      // Roving tab stop on the selected tab; if none is selected yet, every tab stays reachable.
+      tabIndex={active || selected === "" ? 0 : -1}
       disabled={disabled}
       onClick={() => select(value)}
       className={cn(

@@ -59,7 +59,8 @@ export function Section({
   innerClassName?: string;
 }) {
   return (
-    <Tag className={cn("relative overflow-hidden", TONES[tone], SPACING[spacing], className)} {...rest}>
+    // overflow-clip (not hidden) clips decorations without creating a scroll container, so sticky children still work.
+    <Tag className={cn("relative overflow-clip", TONES[tone], SPACING[spacing], className)} {...rest}>
       {dots && <div aria-hidden className="bg-dot-grid pointer-events-none absolute inset-0 opacity-60" />}
       <Container size={size} className={cn("relative", innerClassName)}>
         {children}

@@ -44,8 +44,24 @@ export function ThemeToggle({
       ? "bg-white text-slate-900 shadow-sm"
       : "bg-white text-slate-900 shadow-sm dark:bg-slate-600 dark:text-white";
 
+  // Radio-group keyboard pattern: arrows move and select; one tab stop.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    const current = Math.max(0, OPTIONS.findIndex((o) => o.key === (pref ?? "system")));
+    const step = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1;
+    const next = (current + step + OPTIONS.length) % OPTIONS.length;
+    setStoredTheme(OPTIONS[next].key);
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+  };
+
   return (
-    <div role="radiogroup" aria-label="Theme" className={cn("inline-flex items-center gap-0.5 rounded-full p-0.5", track, className)}>
+    <div
+      role="radiogroup"
+      aria-label="Theme"
+      onKeyDown={onKeyDown}
+      className={cn("inline-flex items-center gap-0.5 rounded-full p-0.5", track, className)}
+    >
       {OPTIONS.map(({ key, label, icon: Icon }) => {
         const selected = pref === key;
         return (
@@ -56,6 +72,7 @@ export function ThemeToggle({
             aria-checked={selected}
             aria-label={label}
             title={label}
+            tabIndex={selected || (pref === null && key === "system") ? 0 : -1}
             onClick={() => setStoredTheme(key)}
             className={cn(
               "inline-flex min-h-8 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold transition-colors",

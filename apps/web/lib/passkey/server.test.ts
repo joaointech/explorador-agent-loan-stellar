@@ -19,6 +19,7 @@ const store = vi.hoisted(() => {
   process.env.WEBAUTHN_RP_ID = "localhost";
   process.env.WEBAUTHN_RP_NAME = "explorador advance";
   process.env.APP_URL = "http://localhost:3106";
+  process.env.ADMIN_EMAILS = "boss@explorador.ai";
   return {
     passkeys: [] as PasskeyRow[],
     users: new Map<string, { id: string; email: string; role: "AGENT" | "ADMIN" }>(),
@@ -27,6 +28,13 @@ const store = vi.hoisted(() => {
 
 vi.mock("@/lib/db", () => ({
   db: {
+    user: {
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: { role: "AGENT" | "ADMIN" } }) => {
+        const row = store.users.get(where.id)!;
+        Object.assign(row, data);
+        return row;
+      }),
+    },
     passkey: {
       findMany: vi.fn(async ({ where }: { where: { userId: string } }) => store.passkeys.filter((p) => p.userId === where.userId)),
       findUnique: vi.fn(async ({ where, include }: { where: { credentialId: string }; include?: { user?: boolean } }) => {
@@ -142,5 +150,24 @@ describe("discoverable sign-in", () => {
     await expectHttpError(completeLogin(assertionToJSON(impostor, softwareAssertion(impostor, challenge)), options.challenge), 401, "PASSKEY_INVALID");
 
     await expectHttpError(completeLogin(assertionToJSON(passkey, softwareAssertion(passkey, challenge)), "wrong"), 401, "PASSKEY_INVALID");
+  });
+
+  it("re-syncs the role with ADMIN_EMAILS, so a removed admin can't keep signing in as admin", async () => {
+    const passkey = await registered();
+    const signIn = async () => {
+      const options = await buildLoginOptions();
+      const assertion = softwareAssertion(passkey, Buffer.from(options.challenge, "base64url"));
+      return completeLogin(assertionToJSON(passkey, assertion), options.challenge);
+    };
+
+    // Removed from ADMIN_EMAILS since their last email sign-in: demoted.
+    store.users.get(user.userId)!.role = "ADMIN";
+    expect(await signIn()).toEqual({ id: user.userId, email: user.email, role: "AGENT" });
+    expect(store.users.get(user.userId)!.role).toBe("AGENT");
+
+    // Added to ADMIN_EMAILS: promoted.
+    store.users.get(user.userId)!.email = "boss@explorador.ai";
+    expect(await signIn()).toMatchObject({ role: "ADMIN" });
+    expect(store.users.get(user.userId)!.role).toBe("ADMIN");
   });
 });

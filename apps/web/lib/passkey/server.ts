@@ -13,6 +13,7 @@ import {
 } from "@simplewebauthn/server";
 import { z } from "zod";
 
+import { roleForEmail } from "@/lib/auth/users";
 import { db, type Role } from "@/lib/db";
 import { badRequest, conflict, HttpError, unauthorized } from "@/lib/http";
 
@@ -147,5 +148,9 @@ export async function completeLogin(
   if (!verification.verified) throw new HttpError(401, "PASSKEY_INVALID", "Passkey sign-in could not be verified");
 
   await db.passkey.update({ where: { id: passkey.id }, data: { counter: verification.authenticationInfo.newCounter } });
-  return { id: passkey.user.id, email: passkey.user.email, role: passkey.user.role };
+  // ADMIN_EMAILS is the source of truth for the role, as on email sign-in: a passkey
+  // must not let someone removed from the list keep signing in as admin.
+  const role = roleForEmail(passkey.user.email);
+  if (role !== passkey.user.role) await db.user.update({ where: { id: passkey.user.id }, data: { role } });
+  return { id: passkey.user.id, email: passkey.user.email, role };
 }

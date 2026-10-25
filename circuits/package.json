@@ -1,0 +1,16 @@
+{
+  "name": "@advance/circuits",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CPCV attestation circuit (spec §8): circom source, local trusted setup (build.sh) and circuit tests. Final artifacts are committed under apps/web/zk.",
+  "scripts": {
+    "build": "bash build.sh",
+    "test": "node --test --test-concurrency=1 --test-timeout=900000 \"test/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "circomlib": "2.0.5",
+    "circomlibjs": "0.1.7",
+    "snarkjs": "0.7.6"
+  }
+}

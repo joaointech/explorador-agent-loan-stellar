@@ -151,18 +151,33 @@ mod test {
             Ok(333_333_333_333_333_333_333_333_333_334)
         );
         // i128::MAX × i128::MAX / i128::MAX.
-        assert_eq!(mul_div_floor(&e, i128::MAX, i128::MAX, i128::MAX), Ok(i128::MAX));
-        assert_eq!(mul_div_ceil(&e, i128::MIN, i128::MAX, i128::MAX), Ok(i128::MIN));
+        assert_eq!(
+            mul_div_floor(&e, i128::MAX, i128::MAX, i128::MAX),
+            Ok(i128::MAX)
+        );
+        assert_eq!(
+            mul_div_ceil(&e, i128::MIN, i128::MAX, i128::MAX),
+            Ok(i128::MIN)
+        );
         // Negative wide products.
-        assert_eq!(mul_div_floor(&e, -x - 1, SCALE, 3 * SCALE), Ok(-333_333_333_333_333_333_333_333_333_334));
-        assert_eq!(mul_div_ceil(&e, -x - 1, SCALE, 3 * SCALE), Ok(-333_333_333_333_333_333_333_333_333_333));
+        assert_eq!(
+            mul_div_floor(&e, -x - 1, SCALE, 3 * SCALE),
+            Ok(-333_333_333_333_333_333_333_333_333_334)
+        );
+        assert_eq!(
+            mul_div_ceil(&e, -x - 1, SCALE, 3 * SCALE),
+            Ok(-333_333_333_333_333_333_333_333_333_333)
+        );
     }
 
     #[test]
     fn overflow_and_zero_divisor_fail() {
         let e = env();
         assert_eq!(mul_div_floor(&e, i128::MAX, 2, 1), Err(Error::Overflow));
-        assert_eq!(mul_div_ceil(&e, i128::MAX, i128::MAX, 2), Err(Error::Overflow));
+        assert_eq!(
+            mul_div_ceil(&e, i128::MAX, i128::MAX, 2),
+            Err(Error::Overflow)
+        );
         assert_eq!(mul_div_floor(&e, 1, 1, 0), Err(Error::Overflow));
         assert_eq!(mul_div_ceil(&e, i128::MAX, 1, 1), Ok(i128::MAX));
         assert_eq!(mul_div_floor(&e, i128::MIN, 1, -1), Err(Error::Overflow));
@@ -224,7 +239,11 @@ mod test {
         let mut q_lo: u128 = 0;
         let mut r: u128 = 0;
         for i in (0..256).rev() {
-            let bit = if i >= 128 { (hi >> (i - 128)) & 1 } else { (lo >> i) & 1 };
+            let bit = if i >= 128 {
+                (hi >> (i - 128)) & 1
+            } else {
+                (lo >> i) & 1
+            };
             let carry = r >> 127;
             r = (r << 1) | bit;
             if carry == 1 || r >= d {
@@ -239,7 +258,11 @@ mod test {
         if q_hi != 0 {
             return (None, None);
         }
-        let ceil = if r != 0 { q_lo.checked_add(1) } else { Some(q_lo) };
+        let ceil = if r != 0 {
+            q_lo.checked_add(1)
+        } else {
+            Some(q_lo)
+        };
         (Some(q_lo), ceil)
     }
 }

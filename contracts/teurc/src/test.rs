@@ -127,9 +127,9 @@ fn ttls_are_extended_on_use() {
     let instance_ttl = |e: &Env| e.as_contract(&t.address, || e.storage().instance().get_ttl());
     let balance_ttl = |e: &Env, a: &Address| {
         e.as_contract(&t.address, || {
-            e.storage()
-                .persistent()
-                .get_ttl(&stellar_tokens::fungible::FungibleStorageKey::Balance(a.clone()))
+            e.storage().persistent().get_ttl(
+                &stellar_tokens::fungible::FungibleStorageKey::Balance(a.clone()),
+            )
         })
     };
 

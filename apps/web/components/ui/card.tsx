@@ -58,7 +58,11 @@ export function Card({
   );
 }
 
-/** Title row for a card: optional eyebrow, title, description and a right-aligned action. */
+/**
+ * Title row for a card: optional eyebrow, title, description and a right-aligned
+ * action. The action sits beside the title only; the description runs the full
+ * width under both, so a badge doesn't squeeze it into a narrow column on phones.
+ */
 export function CardHeader({
   title,
   description,
@@ -75,13 +79,13 @@ export function CardHeader({
   titleAs?: ElementType;
 }) {
   return (
-    <div className={cn("flex items-start justify-between gap-x-4 gap-y-2", className)}>
-      <div className="min-w-0 flex-1">
+    <div className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4", className)}>
+      <div className="min-w-0">
         {eyebrow && <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">{eyebrow}</p>}
         <TitleTag className={cn("text-base font-bold text-heading sm:text-lg", eyebrow ? "mt-1" : undefined)}>{title}</TitleTag>
-        {description && <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p>}
       </div>
       {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+      {description && <p className="col-span-full mt-1 text-sm leading-relaxed text-muted">{description}</p>}
     </div>
   );
 }

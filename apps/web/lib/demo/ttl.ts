@@ -1,6 +1,6 @@
 // TTL housekeeping for the deployed contracts. Every contract call extends its
 // instance (and with it the contract code) to ~30 days once the TTL drops below
-// ~15 days (spec §7). On today's testnet that extension is very expensive for
+// ~15 days (spec §7). While testnet fees spike that extension is very expensive for
 // the code entries (thousands of XLM for advance_pool's 55 KB), so the deploy
 // tooling can pre-extend code and instances in one admin-paid transaction
 // instead of leaving the bill to the first card draw after day 15.
@@ -63,7 +63,13 @@ export async function readTtls(entries: TtlEntry[]): Promise<{ latestLedger: num
 }
 
 /** Extends every entry to live at least `days` more days (ExtendFootprintTTL, paid by `source`, fee-bumped if needed). */
-export async function extendTtls(entries: TtlEntry[], days: number, source: Keypair, log: Log): Promise<{ txHash: string; feeStroops: bigint }> {
+export async function extendTtls(
+  entries: TtlEntry[],
+  days: number,
+  source: Keypair,
+  log: Log,
+  opts: { dryRun?: boolean } = {},
+): Promise<{ txHash: string | null; feeStroops: bigint }> {
   const server = getRpc();
   const { networkPassphrase } = networkConfig();
   const extendTo = Math.round(days * LEDGERS_PER_DAY);
@@ -79,6 +85,7 @@ export async function extendTtls(entries: TtlEntry[], days: number, source: Keyp
   const simData = (sim as rpc.Api.SimulateTransactionSuccessResponse).transactionData.build();
   const fee = simData.resourceFee + 20_000n;
   log(`extend ${entries.length} entries to ${days} days: fee ${(Number(fee) / 1e7).toFixed(2)} XLM`);
+  if (opts.dryRun) return { txHash: null, feeStroops: fee };
   await ensureXlm(source.publicKey(), Number(fee / STROOPS_PER_XLM) + 100, log);
   const fresh = await rpcCall("getAccount", () => server.getAccount(source.publicKey()));
   const tx = sorobanEnvelope(source, fresh.sequenceNumber(), Operation.extendFootprintTtl({ extendTo }), simData);

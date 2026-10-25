@@ -189,7 +189,7 @@ async function buildSignSubmit<T>(p: InvokeParams<T>): Promise<InvokeResult<T>> 
     return submitAndPoll(prepared, p.fn, p.decode);
   }
   // The resource fee exceeds the uint32 transaction fee (e.g. the call extends the TTL of a
-  // contract's code on today's testnet): same transaction, wrapped in a fee bump.
+  // contract's code while testnet fees spike): same transaction, wrapped in a fee bump.
   const invoke = tx.operations[0] as Operation.InvokeHostFunction;
   const auth = invoke.auth?.length ? invoke.auth : (sim.result?.auth ?? []);
   console.warn(`[stellar] ${p.fn}: resource fee ${data.resourceFee} stroops exceeds the uint32 fee cap; fee-bumping`);

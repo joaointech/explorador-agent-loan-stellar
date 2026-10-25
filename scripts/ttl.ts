@@ -1,10 +1,10 @@
-// pnpm --filter @advance/scripts ttl [--extend-days <n>] [--code-only]
+// pnpm --filter @advance/scripts ttl [--extend-days <n>] [--code-only] [--dry-run]
 //
 // Shows how long the active deployment's contract code and instances stay live
 // on testnet and, with --extend-days, extends them (admin-paid, fee-bumped,
 // topped up with Friendbot). Contracts extend their own instance + code to ~30
-// days once below ~15 days; on today's testnet the code part costs thousands
-// of XLM, so pre-extending keeps that bill away from card draws.
+// days once below ~15 days; while testnet fees spike the code part costs
+// thousands of XLM, so pre-extending keeps that bill away from card draws.
 
 import { parseArgs } from "node:util";
 
@@ -14,6 +14,7 @@ const { values: args } = parseArgs({
   options: {
     "extend-days": { type: "string" },
     "code-only": { type: "boolean", default: false },
+    "dry-run": { type: "boolean", default: false },
   },
 });
 
@@ -41,9 +42,13 @@ try {
   if (args["extend-days"]) {
     const days = Number(args["extend-days"]);
     if (!Number.isFinite(days) || days <= 0) throw new Error("--extend-days must be a positive number");
-    const res = await extendTtls(entries, days, adminKeypair(), log);
-    log(`extended: ${explorerUrl("tx", res.txHash)}`);
-    await show();
+    const res = await extendTtls(entries, days, adminKeypair(), log, { dryRun: args["dry-run"] });
+    if (res.txHash) {
+      log(`extended: ${explorerUrl("tx", res.txHash)}`);
+      await show();
+    } else {
+      log("dry run: nothing submitted");
+    }
   }
 } catch (err) {
   console.error("[ttl] FAILED", err);

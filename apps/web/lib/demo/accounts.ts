@@ -1,7 +1,7 @@
 // Testnet account helpers for the deploy / seed / e2e flows: Friendbot
-// funding, XLM balances and top-ups. Testnet fees are very high right now
-// (DECISIONS.md "Smart accounts"), so a role that runs low on XLM is topped up
-// by funding a throwaway account with Friendbot (10,000 XLM) and merging it in.
+// funding, XLM balances and top-ups. Testnet fees spike at times (DECISIONS.md
+// "Deploy, seed and e2e"), so a role that runs low on XLM is topped up by
+// funding a throwaway account with Friendbot (10,000 XLM) and merging it in.
 
 import { Account, Asset, Keypair, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 

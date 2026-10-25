@@ -1,6 +1,6 @@
 // Final transaction envelopes for Soroban operations whose resource fee may not
-// fit the uint32 transaction fee (~429 XLM). Today's testnet charges thousands
-// of XLM for some operations (WASM uploads, contract code TTL extensions that a
+// fit the uint32 transaction fee (~429 XLM). When testnet fees spike, some
+// operations cost thousands of XLM (WASM uploads, contract code TTL extensions that a
 // contract call triggers when its code drops below the extension threshold), so
 // such transactions are wrapped in a fee bump, whose fee is an int64: the inner
 // transaction is built with a placeholder resource fee (the SDK builder caps

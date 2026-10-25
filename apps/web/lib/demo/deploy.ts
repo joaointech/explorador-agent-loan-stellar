@@ -107,7 +107,7 @@ export async function uploadWasm(name: string, bytes: Uint8Array, log: Log): Pro
     func: xdr.HostFunction.hostFunctionTypeUploadContractWasm(Buffer.from(bytes)),
     source: admin,
     label: `upload ${name}`,
-    // Upload fees are thousands of XLM on today's testnet: top the admin up first.
+    // Upload fees reach thousands of XLM when testnet fees spike: top the admin up first.
     beforeSubmit: async (fee) => {
       log(`${name}: upload fee ${(Number(fee) / 1e7).toFixed(2)} XLM`);
       await ensureXlm(admin.publicKey(), Number(fee / STROOPS_PER_XLM) + 300, log);

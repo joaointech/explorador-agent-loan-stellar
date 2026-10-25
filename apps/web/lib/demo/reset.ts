@@ -13,7 +13,7 @@
 //
 // Duration: ~35 s of deploys + ~2 minutes of seeding on testnet, inside the
 // route's `maxDuration = 300`. The deployer and fee payers are topped up with
-// Friendbot when low (fees are very high on today's testnet).
+// Friendbot when low (testnet fees spike at times).
 
 import type { ResetLogEvent } from "@/lib/types/api";
 

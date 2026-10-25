@@ -142,7 +142,7 @@ export async function runSeed(opts: { log: Log }): Promise<SeedSummary> {
     inProcessMutex("demo-seed:mint", async () => {
       const s = SEED_DEALS[key];
       const agent = agents[s.agent];
-      // A mint costs ~1,000-1,500 XLM on today's testnet (new persistent entries with 90-day TTLs).
+      // A mint cost ~1,000-1,500 XLM while testnet fees spiked (new persistent entries with 90-day TTLs).
       await ensureXlm(operator.publicKey(), 2_500, (m) => log(`operator: ${m}`));
       const res = await createCpcvNote(agent.userId, { ...s.deal, cpcvDay: d0 + s.cpcvOn, escrituraDay: d0 + s.escrituraOn });
       notes[key] = { noteId: res.noteId, mintTx: res.txHash };

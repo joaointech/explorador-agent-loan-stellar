@@ -1,9 +1,10 @@
 // pnpm --filter @advance/scripts fund [--operator <xlm>] [--sponsor <xlm>] [--admin <xlm>] [--treasury <xlm>]
 //
 // Tops the role accounts up to at least the given XLM balance by merging fresh
-// Friendbot accounts (10,000 XLM each) into them. Today's testnet fees are very
-// high: a cpcv_note.mint costs ~1,000 XLM and a card_draw ~50-100 XLM for the
-// operator; an agent's first transaction ~150 XLM for the sponsor.
+// Friendbot accounts (10,000 XLM each) into them. Testnet fees swing: while
+// they spiked (2026-10-25) a cpcv_note.mint cost ~1,000 XLM and a card_draw
+// ~50-100 XLM for the operator, an agent's first transaction ~150 XLM for the
+// sponsor; at normal levels they cost fractions of an XLM.
 
 import { parseArgs } from "node:util";
 

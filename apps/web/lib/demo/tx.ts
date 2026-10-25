@@ -3,9 +3,9 @@
 // simulate → restore archived entries if asked → sign Address-credential auth
 // entries → re-simulate (enforcing) → submit → poll.
 //
-// Testnet fees are inflated right now: a WASM upload costs thousands of XLM,
-// far above the ~429 XLM uint32 transaction fee cap, so transactions whose
-// resource fee doesn't fit are fee-bumped (lib/stellar/envelope.ts).
+// When testnet fees spike a WASM upload costs thousands of XLM, far above the
+// ~429 XLM uint32 transaction fee cap, so transactions whose resource fee
+// doesn't fit are fee-bumped (lib/stellar/envelope.ts).
 
 import {
   Account,

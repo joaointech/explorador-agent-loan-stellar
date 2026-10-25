@@ -1,16 +1,28 @@
-// Built-in simulated card network, used while LITHIC_API_KEY is unset (or for
-// cards issued without it). It stands in for Lithic's side only: it builds an
-// ASA request shaped exactly like Lithic's (type-checked against the SDK's
-// webhook event) and the caller runs it through the same pipeline as
-// `POST /api/lithic/asa`. Card tokens and transaction tokens start with `sim_`.
+// Built-in simulated card network, used while LITHIC_API_KEY is unset (and for
+// cards issued without it). It stands in for Lithic's side only: it issues
+// cards, and builds ASA requests shaped exactly like Lithic's (type-checked
+// against the SDK's webhook event) that the caller runs through the same
+// pipeline as `POST /api/lithic/asa`. Card tokens (`sim_card_…`) and
+// transaction tokens (`sim_txn_…`) start with `sim_`.
 
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 
 import type Lithic from "lithic";
+
+import type { CardRevealResponse } from "@/lib/types/api";
 
 export const SIMULATED_PREFIX = "sim_";
 
 export const isSimulatedToken = (token: string) => token.startsWith(SIMULATED_PREFIX);
+
+export function issueSimulatedCard(): { token: string; last4: string } {
+  return { token: `${SIMULATED_PREFIX}card_${randomUUID()}`, last4: String(randomInt(0, 10_000)).padStart(4, "0") };
+}
+
+/** Obviously fake test details; the PAN ends in the card's last4 so it matches the card visual. */
+export function simulatedCardDetails(last4: string): CardRevealResponse {
+  return { pan: `400000000000${last4}`, cvv: "000", expMonth: "12", expYear: String(new Date().getUTCFullYear() + 3) };
+}
 
 export interface SimulatedAuthorizationInput {
   cardToken: string;

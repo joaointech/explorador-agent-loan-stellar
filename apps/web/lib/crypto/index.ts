@@ -92,19 +92,11 @@ function assertKey(key: Uint8Array): void {
   if (key.length !== KEY_BYTES) throw new Error(`AES-256-GCM key must be ${KEY_BYTES} bytes`);
 }
 
-/**
- * Encrypts a JSON-serializable value with AES-256-GCM. Output bytes are
- * `iv (12) ‖ tag (16) ‖ ciphertext`, ready for a Prisma `Bytes` column
- * (`Cpcv.piiEncrypted`). Uses PII_ENCRYPTION_KEY unless a key is given.
- * Plain JSON only: convert bigints to strings or numbers first.
- */
-export function encryptJson(value: unknown, key: Uint8Array = piiKey()): Uint8Array<ArrayBuffer> {
+function seal(plaintext: Uint8Array | string, key: Uint8Array): Uint8Array<ArrayBuffer> {
   assertKey(key);
-  const json = JSON.stringify(value);
-  if (json === undefined) throw new TypeError("encryptJson: value is not JSON-serializable");
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv(AES_ALGORITHM, key, iv, { authTagLength: TAG_BYTES });
-  const ciphertext = Buffer.concat([cipher.update(json, "utf8"), cipher.final()]);
+  const ciphertext = Buffer.concat([typeof plaintext === "string" ? cipher.update(plaintext, "utf8") : cipher.update(plaintext), cipher.final()]);
   const tag = cipher.getAuthTag();
 
   const out = new Uint8Array(IV_BYTES + TAG_BYTES + ciphertext.length);
@@ -114,13 +106,9 @@ export function encryptJson(value: unknown, key: Uint8Array = piiKey()): Uint8Ar
   return out;
 }
 
-/**
- * Decrypts bytes produced by `encryptJson`. Throws if the data was tampered
- * with, truncated, or encrypted under a different key.
- */
-export function decryptJson<T = unknown>(blob: Uint8Array, key: Uint8Array = piiKey()): T {
+function unseal(blob: Uint8Array, key: Uint8Array, caller: string): Buffer {
   assertKey(key);
-  if (blob.length < IV_BYTES + TAG_BYTES) throw new Error("decryptJson: ciphertext is too short");
+  if (blob.length < IV_BYTES + TAG_BYTES) throw new Error(`${caller}: ciphertext is too short`);
   const bytes = Buffer.from(blob.buffer, blob.byteOffset, blob.byteLength);
   const iv = bytes.subarray(0, IV_BYTES);
   const tag = bytes.subarray(IV_BYTES, IV_BYTES + TAG_BYTES);
@@ -128,11 +116,46 @@ export function decryptJson<T = unknown>(blob: Uint8Array, key: Uint8Array = pii
 
   const decipher = createDecipheriv(AES_ALGORITHM, key, iv, { authTagLength: TAG_BYTES });
   decipher.setAuthTag(tag);
-  let plaintext: Buffer;
   try {
-    plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   } catch {
-    throw new Error("decryptJson: authentication failed (wrong key or tampered data)");
+    throw new Error(`${caller}: authentication failed (wrong key or tampered data)`);
   }
-  return JSON.parse(plaintext.toString("utf8")) as T;
+}
+
+/**
+ * Encrypts a JSON-serializable value with AES-256-GCM. Output bytes are
+ * `iv (12) ‖ tag (16) ‖ ciphertext`, ready for a Prisma `Bytes` column
+ * (`Cpcv.piiEncrypted`). Uses PII_ENCRYPTION_KEY unless a key is given.
+ * Plain JSON only: convert bigints to strings or numbers first.
+ */
+export function encryptJson(value: unknown, key: Uint8Array = piiKey()): Uint8Array<ArrayBuffer> {
+  const json = JSON.stringify(value);
+  if (json === undefined) throw new TypeError("encryptJson: value is not JSON-serializable");
+  return seal(json, key);
+}
+
+/**
+ * Decrypts bytes produced by `encryptJson`. Throws if the data was tampered
+ * with, truncated, or encrypted under a different key.
+ */
+export function decryptJson<T = unknown>(blob: Uint8Array, key: Uint8Array = piiKey()): T {
+  return JSON.parse(unseal(blob, key, "decryptJson").toString("utf8")) as T;
+}
+
+/**
+ * Encrypts raw bytes (e.g. an uploaded PDF, `CpcvDocument.contentEncrypted`)
+ * with AES-256-GCM, in the same `iv ‖ tag ‖ ciphertext` layout as `encryptJson`.
+ * Uses PII_ENCRYPTION_KEY unless a key is given.
+ */
+export function encryptBytes(plaintext: Uint8Array, key: Uint8Array = piiKey()): Uint8Array<ArrayBuffer> {
+  return seal(plaintext, key);
+}
+
+/** Decrypts bytes produced by `encryptBytes`. Throws on tampering, truncation or a different key. */
+export function decryptBytes(blob: Uint8Array, key: Uint8Array = piiKey()): Uint8Array<ArrayBuffer> {
+  const plaintext = unseal(blob, key, "decryptBytes");
+  const out = new Uint8Array(plaintext.length);
+  out.set(plaintext);
+  return out;
 }

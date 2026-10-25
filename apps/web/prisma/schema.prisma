@@ -44,13 +44,14 @@ enum ChainStatus {
 }
 
 model User {
-  id          String    @id @default(cuid())
-  email       String    @unique
-  role        Role
-  displayName String?
-  createdAt   DateTime  @default(now())
-  passkeys    Passkey[]
-  agent       Agent?
+  id            String         @id @default(cuid())
+  email         String         @unique
+  role          Role
+  displayName   String?
+  createdAt     DateTime       @default(now())
+  passkeys      Passkey[]
+  agent         Agent?
+  cpcvDocuments CpcvDocument[] // signed CPCV PDFs this admin uploaded
 }
 
 model EmailCode {
@@ -93,9 +94,9 @@ model Agent {
 }
 
 model Cpcv {
-  id                   String     @id @default(cuid())
+  id                   String        @id @default(cuid())
   agentId              String
-  agent                Agent      @relation(fields: [agentId], references: [userId])
+  agent                Agent         @relation(fields: [agentId], references: [userId])
   piiEncrypted         Bytes // AES-256-GCM JSON: buyer/seller names + NIFs, property address, sale price, rate, cpcv date
   totalCommissionCents BigInt
   agentCommissionCents BigInt
@@ -103,13 +104,34 @@ model Cpcv {
   commitment           String // hex
   nullifier            String // hex
   proof                Json? // snarkjs proof + publicSignals
-  status               CpcvStatus @default(DRAFT)
-  noteId               Int?       @unique
+  status               CpcvStatus    @default(DRAFT)
+  noteId               Int?          @unique
   mintTxHash           String?
   settleTxHash         String?
   cancelTxHash         String?
   error                String?
-  createdAt            DateTime   @default(now())
+  createdAt            DateTime      @default(now())
+  document             CpcvDocument? // the signed CPCV PDF, when the admin uploaded one
+}
+
+// The signed CPCV PDF an admin uploads on New CPCV (personal data: never
+// on-chain, never in the public APIs). Content and Claude's extraction are
+// AES-256-GCM encrypted with PII_ENCRYPTION_KEY, like Cpcv.piiEncrypted.
+// Uploaded before the CPCV exists; the pipeline links it (cpcvId) when the
+// admin submits. Unlinked uploads are deleted after 24 h.
+model CpcvDocument {
+  id                  String   @id @default(cuid())
+  createdAt           DateTime @default(now())
+  uploadedById        String
+  uploadedBy          User     @relation(fields: [uploadedById], references: [id])
+  fileName            String // sanitized original name, for Content-Disposition
+  sizeBytes           Int
+  sha256              String // hex, of the plaintext PDF
+  contentEncrypted    Bytes // AES-256-GCM: iv ‖ tag ‖ ciphertext of the PDF bytes
+  extractionEncrypted Bytes? // AES-256-GCM JSON: CpcvExtraction (lib/types/api.ts), when Claude read it
+  extractionError     String? // error code when the AI prefill didn't run or failed (no personal data)
+  cpcvId              String?  @unique
+  cpcv                Cpcv?    @relation(fields: [cpcvId], references: [id], onDelete: Cascade)
 }
 
 model CardAuthorization {

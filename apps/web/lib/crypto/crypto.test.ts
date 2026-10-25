@@ -6,7 +6,9 @@ vi.hoisted(() => {
 });
 
 import {
+  decryptBytes,
   decryptJson,
+  encryptBytes,
   encryptJson,
   hashEmailCode,
   hmacSha256Hex,
@@ -85,6 +87,36 @@ describe("AES-256-GCM JSON encryption", () => {
   it("refuses values JSON can't represent", () => {
     expect(() => encryptJson(undefined)).toThrow(TypeError);
     expect(() => encryptJson({ n: 1n })).toThrow();
+  });
+});
+
+describe("AES-256-GCM byte encryption (uploaded PDFs)", () => {
+  const pdf = new Uint8Array(Buffer.from("%PDF-1.7\n% fake contract bytes ção\n%%EOF\n", "utf8"));
+
+  it("round-trips raw bytes with the PII key, in the same iv ‖ tag ‖ ciphertext layout", () => {
+    const blob = encryptBytes(pdf);
+    expect(blob.length).toBe(12 + 16 + pdf.length);
+    expect(Buffer.from(blob).includes(Buffer.from("%PDF"))).toBe(false);
+    expect(Buffer.from(decryptBytes(blob)).equals(Buffer.from(pdf))).toBe(true);
+  });
+
+  it("is interchangeable with the JSON helpers' format", () => {
+    const blob = encryptBytes(new TextEncoder().encode(JSON.stringify({ a: 1 })));
+    expect(decryptJson(blob)).toEqual({ a: 1 });
+    expect(new TextDecoder().decode(decryptBytes(encryptJson({ b: 2 })))).toBe('{"b":2}');
+  });
+
+  it("detects tampering, truncation and a different key", () => {
+    const blob = encryptBytes(pdf);
+    const tampered = new Uint8Array(blob);
+    tampered[blob.length - 1]! ^= 0x80;
+    expect(() => decryptBytes(tampered)).toThrow(/decryptBytes: authentication failed/);
+    expect(() => decryptBytes(blob.subarray(0, 27))).toThrow(/too short/);
+    expect(() => decryptBytes(blob, parseKey("22".repeat(32)))).toThrow(/authentication failed/);
+  });
+
+  it("handles an empty file", () => {
+    expect(decryptBytes(encryptBytes(new Uint8Array(0)))).toHaveLength(0);
   });
 });
 

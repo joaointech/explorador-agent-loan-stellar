@@ -66,7 +66,9 @@ echo "manager=$MANAGER worker=$WORKER service=$SWARM_SERVICE tag=$TAG"
 # quotes and `KEY=v  # note` its comment, which would break e.g.
 # STELLAR_NETWORK_PASSPHRASE and DATABASE_URL. Normalize to plain KEY=value:
 # drop comments, blank lines and `export `, unquote quoted values (no escapes,
-# single-line), cut ` #…` comments off unquoted ones.
+# single-line), cut ` #…` comments off unquoted ones. `KEY=   # note` (how
+# .env.example documents an optional key's default) is an empty value, as in
+# dotenv: kept as `# note`, it reached the app as the value itself.
 dotenv_to_env_file() {
   awk '
     /^[ \t]*(#|$)/ { next }
@@ -79,7 +81,9 @@ dotenv_to_env_file() {
       key = substr(line, 1, eq - 1); gsub(/[ \t]/, "", key)
       val = substr(line, eq + 1); sub(/^[ \t]+/, "", val)
       q = substr(val, 1, 1)
-      if ((q == "\"" || q == "\047") && index(substr(val, 2), q) > 0) {
+      if (q == "#") {
+        val = ""
+      } else if ((q == "\"" || q == "\047") && index(substr(val, 2), q) > 0) {
         val = substr(val, 2, index(substr(val, 2), q) - 1)
       } else {
         sub(/[ \t]+#.*$/, "", val)

@@ -27,6 +27,8 @@ Choices made where `spec.md` was silent, or where the product owner gave new dir
 
 ## ZK circuit and cpcv_note
 
+- 2026-10-25: **`advance_pool.open_line` takes the note by value** (`fn open_line(env, note: Note)`), not `note_id` (deviation from spec §7.2 step 10 / §7.3). Soroban prohibits contract re-entry (soroban-env-host 28 calls every external contract with `ContractReentryMode::Prohibited` → "Contract re-entry is not allowed"), so `cpcv_note.mint → advance_pool.open_line → cpcv_note.get` would trap. `mint` passes the stored `Note`; the pool authenticates with `note_contract.require_auth()` (satisfied because `cpcv_note` is the direct invoker). Agreed with the orchestrator and the pool workstream.
+
 ## Web: design system and shell
 
 ## Web: landing and registry pages

@@ -178,7 +178,6 @@ const Big = ({ children }: { children: ReactNode }) => <span className="text-lg 
 /** Everything public about one CPCV Note (spec §10.2 /registry/[id]). */
 export function NoteDetailView({ detail, protocolNow }: { detail: RegistryDetailResponse; protocolNow?: number | null }) {
   const { note, draws } = detail;
-  const drawsTotal = BigInt(draws.total);
   return (
     <>
       <section aria-labelledby="note-title" className="relative overflow-clip bg-section">
@@ -280,19 +279,6 @@ export function NoteDetailView({ detail, protocolNow }: { detail: RegistryDetail
               <FieldRow label="Minted" hint="Protocol clock">
                 <DateText value={note.mintedAt} format="datetime" />
               </FieldRow>
-              <FieldRow label="Borrowed on this note">
-                {drawsTotal > 0n || draws.count > 0 ? (
-                  <>
-                    <Amount value={draws.total} />
-                    <span className="font-normal text-muted">
-                      {" "}
-                      across {formatNumber(draws.count)} card {draws.count === 1 ? "purchase" : "purchases"}
-                    </span>
-                  </>
-                ) : (
-                  <span className="font-normal text-muted">Nothing yet</span>
-                )}
-              </FieldRow>
               <FieldRow label="Commitment" hint="Poseidon hash of the hidden deal record">
                 <HexValue value={note.commitment} label="commitment" />
               </FieldRow>
@@ -302,6 +288,15 @@ export function NoteDetailView({ detail, protocolNow }: { detail: RegistryDetail
             </dl>
           </Panel>
           <Panel id="timeline-title" title="Timeline" description="Contract events for this note. Dates use the protocol clock.">
+            <p className="mb-5 flex flex-wrap items-baseline gap-x-2 rounded-xl bg-card-muted px-4 py-3 text-sm ring-1 ring-line">
+              <span className="text-muted">Borrowed by card on this note</span>
+              <span className="ml-auto font-semibold text-heading tabular-nums">
+                {formatEur(draws.total)}{" "}
+                <span className="font-normal text-muted">
+                  in {formatNumber(draws.count)} {draws.count === 1 ? "draw" : "draws"}
+                </span>
+              </span>
+            </p>
             <NoteTimeline events={detail.timeline} />
           </Panel>
         </div>

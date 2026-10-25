@@ -26,7 +26,7 @@ describe("note detail", () => {
     for (const v of ["€15,000.00", "€7,500.00", "€3,750.00", "23 Jan 2027", "in 45 days"]) expect(text).toContain(v);
     expect(text).toContain(`0x${fixtureNotes()[0].commitment}`);
     expect(text).toContain(`0x${fixtureNotes()[0].nullifier}`);
-    expect(text).toMatch(/€3,000\.00 across 2 card purchases/);
+    expect(text).toMatch(/Borrowed by card on this note €3,000\.00 in 2 draws/);
     expect(html).toContain(`href="/registry?q=${detail.note.agent}"`);
   });
 

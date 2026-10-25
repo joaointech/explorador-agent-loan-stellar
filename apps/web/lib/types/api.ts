@@ -203,6 +203,17 @@ export interface AgentDeal {
   escrituraDay: number;
   overdue: boolean;
   mintTxHash: string | null;
+  /** Settled deals: amount the settlement credited to the card balance (indexed NoteSettled), if known. */
+  agentPayout?: Stroops | null;
+  /** Cancelled deals: line debt moved into carried debt (indexed NoteCancelled), if known. */
+  debtCarried?: Stroops | null;
+}
+
+export interface AgentPasskeyInfo {
+  id: string;
+  createdAt: IsoTime;
+  /** The passkey that controls the smart account (the only one that can sign card actions). */
+  signer: boolean;
 }
 
 export type ActivityItem =
@@ -225,19 +236,42 @@ export type ActivityItem =
 
 // GET /api/agent/overview (agent)
 export interface AgentOverviewResponse {
-  user: { email: string; displayName: string | null };
+  user: {
+    email: string;
+    displayName: string | null;
+    /** Registered passkeys, oldest first. */
+    passkeys?: AgentPasskeyInfo[];
+  };
   agent: {
     smartAccount: string | null;
     cardLast4: string | null;
     cardEnabledOnChain: boolean;
     signerKind: "passkey" | "demo-ed25519";
+    /** "simulated": built-in simulated card network (no LITHIC_API_KEY when issued); "lithic": Lithic sandbox. */
+    cardNetwork?: "lithic" | "simulated" | null;
+    /** Activated once, now disabled on-chain (disable_card). */
+    cardPaused?: boolean;
   };
+  /** cardActivated: the activation step is done (enable_card succeeded at least once). */
   onboarding: { passkey: boolean; smartAccount: boolean; card: boolean; cardActivated: boolean };
   position: Jsonify<AgentPosition> | null;
   /** For ticking interest client-side between refreshes. */
-  rates: { agentAprBps: number; borrowIndex: Stroops; protocolNow: UnixSecs; fetchedAtMs: number };
+  rates: {
+    agentAprBps: number;
+    borrowIndex: Stroops;
+    protocolNow: UnixSecs;
+    fetchedAtMs: number;
+    /** false when pool stats couldn't be read: protocolNow is an estimate and interest must not be extrapolated. */
+    live?: boolean;
+  };
   deals: AgentDeal[];
   activity: ActivityItem[];
+  /** Where `position` came from: a live read, Agent.cachedPosition after a failed read, or nothing yet. */
+  positionSource?: "chain" | "cache" | "none";
+  /** When the cached position was read (positionSource "cache"). */
+  positionAsOf?: IsoTime | null;
+  /** Σ approved card purchases not yet drawn on-chain (stroops); spendable = card balance + borrowable now − holds. */
+  pendingHolds?: Stroops;
 }
 
 // POST /api/agent/card/simulate (agent)

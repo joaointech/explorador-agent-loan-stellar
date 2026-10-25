@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Cache Components is off on purpose: almost every page shows live chain
+  // state, so the previous dynamic-by-default model is simpler (DECISIONS.md).
   reactCompiler: true,
   turbopack: {
     rules: {

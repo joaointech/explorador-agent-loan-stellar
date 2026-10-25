@@ -1003,6 +1003,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e04e2fd2b8188ea827b32ef11de88377086d690286ab35747ef7f9bf3ccb590"
 
 [[package]]
+name = "integration_tests"
+version = "0.1.0"
+dependencies = [
+ "advance-shared",
+ "advance_pool",
+ "cpcv_note",
+ "soroban-sdk",
+ "teurc",
+]
+
+[[package]]
 name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

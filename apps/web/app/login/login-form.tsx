@@ -1,7 +1,13 @@
 "use client";
 
+import { KeyRound, Mail } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { PasskeySignInButton } from "@/components/passkey";
+import { Button, buttonClasses } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
+import { Eyebrow } from "@/components/ui/typography";
+import { postLoginPath } from "@/lib/auth/redirect";
 import type { ApiError, EmailStartResponse, EmailVerifyResponse } from "@/lib/types/api";
 
 type Result<T> = { ok: true; data: T } | { ok: false; code: string; message: string };
@@ -29,12 +35,8 @@ async function postJson<T>(url: string, body: unknown): Promise<Result<T>> {
 /** Codes after which the current code is dead and the user needs a new one. */
 const NEEDS_NEW_CODE = new Set(["CODE_EXPIRED", "CODE_NOT_FOUND", "CODE_USED", "TOO_MANY_ATTEMPTS"]);
 
-const inputClass =
-  "h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-base text-slate-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100";
-const primaryButton =
-  "inline-flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-600";
 const linkButton =
-  "font-semibold text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-400 dark:text-blue-400";
+  "shrink-0 rounded font-semibold whitespace-nowrap text-primary-text underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-subtle disabled:no-underline";
 
 export function LoginForm({ next }: { next?: string }) {
   const [step, setStep] = useState<"email" | "code">("email");
@@ -119,65 +121,79 @@ export function LoginForm({ next }: { next?: string }) {
 
   if (step === "email") {
     return (
-      <form onSubmit={onEmailSubmit} className="space-y-5" noValidate>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Sign in</p>
-          <h1 className="mt-2 text-2xl font-bold">Agents and admins</h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            Enter your email and we&apos;ll send you a 6-digit code. New agents get an account automatically.
-          </p>
+      <div>
+        <Eyebrow>Sign in</Eyebrow>
+        <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-heading">Agents and admins</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          Use your passkey, or get a 6-digit code by email. New agents get an account automatically.
+        </p>
+
+        <div className="mt-6">
+          <PasskeySignInButton
+            className={buttonClasses({ variant: "secondary", fullWidth: true })}
+            redirect={false}
+            // Full navigation (like the email flow) so the new session applies everywhere; honours a safe `next`.
+            onSignedIn={(res) => window.location.assign(postLoginPath(res.user.role, next))}
+          >
+            <KeyRound aria-hidden className="size-4" />
+            Sign in with passkey
+          </PasskeySignInButton>
         </div>
-        <div className="space-y-2">
-          <label htmlFor="email" className="block text-sm font-semibold">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            autoFocus
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={pending}
-            placeholder="you@example.com"
-            className={inputClass}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? "login-error" : undefined}
-          />
+
+        <div className="my-6 flex items-center gap-3 text-xs font-medium tracking-wide text-subtle uppercase" role="separator" aria-label="or">
+          <span className="h-px flex-1 bg-line" />
+          or use your email
+          <span className="h-px flex-1 bg-line" />
         </div>
-        {error && <ErrorMessage message={error.message} />}
-        <button type="submit" className={primaryButton} disabled={pending || email.trim() === ""}>
-          {pending ? "Sending…" : "Send code →"}
-        </button>
-      </form>
+
+        <form onSubmit={onEmailSubmit} className="flex flex-col gap-5" noValidate>
+          <Field id="email" label="Email">
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoFocus
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={pending}
+              placeholder="you@example.com"
+              prefix={<Mail />}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "login-error" : undefined}
+            />
+          </Field>
+          {error && <ErrorMessage message={error.message} />}
+          <Button type="submit" fullWidth arrow={!pending} loading={pending} disabled={email.trim() === ""}>
+            {pending ? "Sending…" : "Send code"}
+          </Button>
+        </form>
+      </div>
     );
   }
 
   return (
-    <form onSubmit={onCodeSubmit} className="space-y-5" noValidate>
+    <form onSubmit={onCodeSubmit} className="flex flex-col gap-5" noValidate>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Sign in</p>
-        <h1 className="mt-2 text-2xl font-bold">Enter your code</h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        <Eyebrow>Sign in</Eyebrow>
+        <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-heading">Enter your code</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
           {sent?.delivery === "demo" ? "Signing in as the demo agent " : "We sent a 6-digit code to "}
-          <span className="font-semibold text-slate-900 dark:text-slate-100">{email}</span>. The code expires in 10
-          minutes.
+          <span className="font-semibold break-words text-heading">{email}</span>. The code expires in 10 minutes.
         </p>
       </div>
 
       {sent?.delivery === "console" && (
-        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-          Email isn&apos;t configured (no <code>RESEND_API_KEY</code>), so the code is printed in the server console.
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-600/15 dark:bg-amber-500/10 dark:text-amber-200">
+          Email isn&apos;t configured (no <code className="font-mono text-xs">RESEND_API_KEY</code>), so the code is printed in the server console.
         </p>
       )}
       {sent?.delivery === "demo" && sent.demoCode && (
-        <div className="flex items-center justify-between gap-3 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-primary-tint px-4 py-3 text-sm text-blue-900 ring-1 ring-primary/15 dark:text-blue-200">
           <span>
-            Seeded demo agents have no inbox. Your code is{" "}
-            <span className="font-mono font-bold tracking-widest tabular-nums">{sent.demoCode}</span>.
+            Seeded demo agents have no inbox. Your code is <span className="font-mono font-bold tracking-widest tabular-nums">{sent.demoCode}</span>.
           </span>
           <button type="button" className={linkButton} disabled={pending} onClick={() => onCodeChange(sent.demoCode!)}>
             Use it
@@ -185,11 +201,8 @@ export function LoginForm({ next }: { next?: string }) {
         </div>
       )}
 
-      <div className="space-y-2">
-        <label htmlFor="code" className="block text-sm font-semibold">
-          6-digit code
-        </label>
-        <input
+      <Field id="code" label="6-digit code">
+        <Input
           ref={codeInput}
           id="code"
           name="code"
@@ -201,26 +214,21 @@ export function LoginForm({ next }: { next?: string }) {
           onChange={(e) => onCodeChange(e.target.value)}
           disabled={pending}
           placeholder="123456"
-          className={`${inputClass} text-center font-mono text-xl tracking-[0.5em] tabular-nums`}
+          inputClassName="h-12 text-center font-mono text-xl tracking-[0.5em] tabular-nums"
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "login-error" : undefined}
         />
-      </div>
+      </Field>
       {error && <ErrorMessage message={error.message} />}
-      <button type="submit" className={primaryButton} disabled={pending || code.length !== 6}>
-        {pending ? "Signing in…" : "Sign in →"}
-      </button>
+      <Button type="submit" fullWidth arrow={!pending} loading={pending} disabled={code.length !== 6}>
+        {pending ? "Signing in…" : "Sign in"}
+      </Button>
 
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center justify-between gap-4 text-sm">
         <button type="button" className={linkButton} onClick={useAnotherEmail} disabled={pending}>
           Use a different email
         </button>
-        <button
-          type="button"
-          className={linkButton}
-          onClick={() => void requestCode(email)}
-          disabled={pending || resendIn > 0}
-        >
+        <button type="button" className={linkButton} onClick={() => void requestCode(email)} disabled={pending || resendIn > 0}>
           {resendIn > 0 ? `Resend in ${resendIn} s` : error && NEEDS_NEW_CODE.has(error.code) ? "Send a new code" : "Resend code"}
         </button>
       </div>
@@ -230,11 +238,7 @@ export function LoginForm({ next }: { next?: string }) {
 
 function ErrorMessage({ message }: { message: string }) {
   return (
-    <p
-      id="login-error"
-      role="alert"
-      className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200"
-    >
+    <p id="login-error" role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-600/15 dark:bg-red-500/10 dark:text-red-200">
       {message}
     </p>
   );

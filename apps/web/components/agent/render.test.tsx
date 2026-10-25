@@ -125,6 +125,15 @@ describe("agent app states (server render)", () => {
     expect(text).toContain("New credit is blocked");
     expect(text).toContain("Written off");
     expect(text).not.toContain("Grace period ends");
+    expect(text).toContain("Credit available Blocked after a write-off: no new credit.");
+    expect(text).not.toContain("your first CPCV Note");
+  });
+
+  it("past deals only (all settled or cancelled): credit opens with the next note, not the first", () => {
+    const base = AGENT_FIXTURES.activeWithDeals;
+    const text = render({ ...base, position: { ...base.position!, lines: [] }, deals: base.deals.filter((d) => d.status === "SETTLED") });
+    expect(text).toContain("Credit available Opens again when explorador mints your next CPCV Note.");
+    expect(text).not.toContain("your first CPCV Note");
   });
 
   it("paused card: resume banner, purchases disabled", () => {

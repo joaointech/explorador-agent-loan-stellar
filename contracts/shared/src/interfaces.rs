@@ -10,7 +10,9 @@ use crate::types::{Note, NoteStatus};
 #[contractclient(name = "PoolClient")]
 pub trait PoolInterface {
     /// Opens the credit line for a freshly minted note (note contract only).
-    fn open_line(env: Env, note_id: u32);
+    /// Takes the note by value: Soroban forbids contract re-entry, so the
+    /// pool cannot call back into `cpcv_note.get` while `mint` is running.
+    fn open_line(env: Env, note: Note);
     /// Single source of truth for time: ledger timestamp + demo offset (spec §5.7).
     fn protocol_now(env: Env) -> u64;
 }

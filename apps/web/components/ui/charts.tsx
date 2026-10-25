@@ -39,6 +39,13 @@ export interface ChartProps {
   data: ChartDatum[];
   /** Key of the x value (e.g. "t" unix seconds, or a label). */
   x: string;
+  /**
+   * "category" (default): one evenly spaced slot per datum. "time": x is a
+   * timestamp plotted to scale, so a fast-forwarded gap stays a gap and a burst
+   * of points doesn't stretch across the axis; ticks are evenly spaced in time
+   * and never repeat a label.
+   */
+  xType?: "category" | "time";
   series: ChartSeries[];
   /** Accessible name; also captions the screen-reader data table. */
   title: string;
@@ -224,6 +231,34 @@ function Frame({
 const AXIS_TICK = { fill: "var(--color-chart-axis)", fontSize: 12 };
 
 /**
+ * Ticks for a time axis: `count` instants evenly spaced from the first to the
+ * last x, dropping any whose label repeats the previous one (labels are
+ * monotonic, so no label appears twice).
+ */
+export function timeTicks(xs: readonly number[], formatX: (value: unknown) => string, count = 5): number[] {
+  if (xs.length === 0) return [];
+  const min = Math.min(...xs);
+  const max = Math.max(...xs);
+  if (max === min) return [min];
+  const ticks: number[] = [];
+  let previous: string | null = null;
+  for (let i = 0; i < count; i++) {
+    const t = Math.round(min + ((max - min) * i) / (count - 1));
+    const label = formatX(t);
+    if (label !== previous) ticks.push(t);
+    previous = label;
+  }
+  return ticks;
+}
+
+/** XAxis props for the chart's x type (see `ChartProps.xType`). */
+function xAxisProps(props: ChartProps, formatX: (value: unknown) => string) {
+  if (props.xType !== "time") return {};
+  const xs = props.data.map((d) => d[props.x]).filter((v): v is number => typeof v === "number");
+  return { type: "number" as const, scale: "time" as const, domain: ["dataMin", "dataMax"] as [string, string], ticks: timeTicks(xs, formatX) };
+}
+
+/**
  * Area chart: blue line on a light-blue wash (share price, TVL).
  *
  *   <AreaChart
@@ -253,6 +288,7 @@ export function AreaChart(props: ChartProps) {
         <CartesianGrid vertical={false} stroke="var(--color-chart-grid)" />
         <XAxis
           dataKey={props.x}
+          {...xAxisProps(props, formatX)}
           tickFormatter={formatX}
           tickLine={false}
           axisLine={{ stroke: "var(--color-chart-grid)" }}
@@ -311,6 +347,7 @@ export function LineChart(props: ChartProps) {
         <CartesianGrid vertical={false} stroke="var(--color-chart-grid)" />
         <XAxis
           dataKey={props.x}
+          {...xAxisProps(props, formatX)}
           tickFormatter={formatX}
           tickLine={false}
           axisLine={{ stroke: "var(--color-chart-grid)" }}

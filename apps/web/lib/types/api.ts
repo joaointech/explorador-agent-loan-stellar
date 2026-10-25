@@ -1,6 +1,7 @@
 // JSON contracts for every API route in spec §9.7. UI code and route handlers
 // both import from here. Extend additively; don't rename fields other code uses.
 
+import type { SessionUser } from "../auth/session-core";
 import type { AgentPosition, Jsonify, NoteStatus, PoolStats } from "./chain";
 
 /** Decimal string of stroops (7 decimals), bigint-safe. */
@@ -51,6 +52,43 @@ export interface ConfigResponse {
   deployment: DeploymentInfo | null;
   demoMode: boolean;
   lithicEnabled: boolean;
+}
+
+// ---------- auth (spec §9.2) ----------
+
+export type { SessionUser };
+
+// POST /api/auth/email/start (public)
+export interface EmailStartRequest {
+  email: string;
+}
+export interface EmailStartResponse {
+  email: string; // normalized (trimmed, lowercase)
+  expiresAt: IsoTime;
+  /** Wait this long before asking for another code. */
+  resendAfterSecs: number;
+  /** "email" = sent with Resend; "console" = RESEND_API_KEY unset, code printed in the server log; "demo" = seeded demo account in DEMO_MODE. */
+  delivery: "email" | "console" | "demo";
+  /** Only for seeded demo accounts (@demo.explorador.pt) while DEMO_MODE is on: they have no real inbox. */
+  demoCode?: string;
+}
+
+// POST /api/auth/email/verify (public): creates the user on first sign-in and starts a pre-passkey session
+export interface EmailVerifyRequest {
+  email: string;
+  code: string; // 6 digits
+  next?: string; // page to return to; ignored unless it's a safe path the user's role may open
+}
+export interface EmailVerifyResponse {
+  user: SessionUser;
+  isNewUser: boolean;
+  /** Where to go now: `next` if allowed, else /agent (agents) or /admin (admins). */
+  redirectTo: string;
+}
+
+// GET /api/auth/session (public); DELETE /api/auth/session signs out and returns { user: null }
+export interface SessionResponse {
+  user: SessionUser | null;
 }
 
 // ---------- pool ----------

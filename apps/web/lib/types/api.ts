@@ -262,7 +262,7 @@ export interface WebAuthnAssertionJSON {
   rawId?: string;
   type?: "public-key";
   response: { authenticatorData: string; clientDataJSON: string; signature: string; userHandle?: string };
-  clientExtensionResults?: Record<string, unknown>;
+  clientExtensionResults?: object;
   authenticatorAttachment?: string;
 }
 

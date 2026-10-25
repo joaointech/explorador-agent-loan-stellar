@@ -62,6 +62,30 @@ export function verifyAsaSignature(
   throw invalid("No matching webhook signature");
 }
 
+/**
+ * The ASA responder's authentication policy: with LITHIC_ASA_HMAC_SECRET set,
+ * every request must carry a valid signature. Without it, unsigned requests
+ * are accepted only outside production (tests, a local tunnel before
+ * `pnpm lithic:enroll`); a production server fails closed with 503, since
+ * anyone who learned a card token could otherwise make the operator draw on
+ * that agent's credit.
+ */
+export function assertAsaAuthentic(
+  rawBody: string,
+  headers: HeadersLike,
+  secret: string | undefined,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): void {
+  if (secret) return verifyAsaSignature(rawBody, headers, secret);
+  if (nodeEnv === "production") {
+    throw new HttpError(
+      503,
+      "ASA_NOT_CONFIGURED",
+      "LITHIC_ASA_HMAC_SECRET is not set: unsigned ASA requests are refused in production (run pnpm lithic:enroll)",
+    );
+  }
+}
+
 /** Signs a body the way Lithic does; for tests and local tooling. */
 export function signAsaPayload(
   secret: string,

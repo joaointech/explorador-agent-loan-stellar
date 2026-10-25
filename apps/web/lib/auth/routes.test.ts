@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
   process.env.SESSION_SECRET = "test-session-secret-0123456789abcdef";
-  process.env.ADMIN_EMAILS = "admin@explorador.ai";
+  process.env.ADMIN_EMAILS = "admin@explorador.ai,admin@demo.explorador.pt";
   process.env.DEMO_MODE = "true";
+  delete process.env.DEMO_ADMIN_SIGNIN;
   delete process.env.RESEND_API_KEY;
 });
 
@@ -38,6 +39,7 @@ import { POST as verify } from "@/app/api/auth/email/verify/route";
 import { DELETE as signOutRoute, GET as session } from "@/app/api/auth/session/route";
 import { resetRateLimits } from "@/lib/auth/rate-limit";
 import { fakeDb } from "@/lib/auth/testing/fake-db";
+import { resetEnvCache } from "@/lib/env";
 import type { EmailStartResponse, EmailVerifyResponse, SessionResponse } from "@/lib/types/api";
 
 const post = (body: unknown, ip = "203.0.113.7") =>
@@ -121,6 +123,43 @@ describe("POST /api/auth/email/start", () => {
     const unknown = await start(post({ email: "zed@demo.explorador.pt" }));
     expect(unknown.status).toBe(400);
     expect(await unknown.json()).toMatchObject({ error: { code: "DEMO_ACCOUNT_NOT_FOUND" } });
+  });
+
+  it("never returns a seeded demo admin's code without DEMO_ADMIN_SIGNIN (only the server console gets it)", async () => {
+    await fakeDb.user.create({ data: { email: "admin@demo.explorador.pt", role: "ADMIN" } });
+    const logged: string[] = [];
+    const info = vi.spyOn(console, "info").mockImplementation((line: unknown) => void logged.push(String(line)));
+    try {
+      const res = await start(post({ email: "admin@demo.explorador.pt" }));
+      expect(res.status).toBe(200);
+      const body = await json<EmailStartResponse>(res);
+      expect(body.delivery).toBe("console");
+      expect(body.demoCode).toBeUndefined();
+      expect(JSON.stringify(body)).not.toMatch(/\d{6}/);
+      expect(state.sent).toHaveLength(0); // demo-domain addresses are never emailed
+
+      // The operator can still sign in with the code from the server log.
+      const code = logged.join("\n").match(/admin@demo\.explorador\.pt: (\d{6})/)?.[1];
+      expect(code).toBeDefined();
+      const verified = await verify(post({ email: "admin@demo.explorador.pt", code }));
+      expect(verified.status).toBe(200);
+      expect(await json<EmailVerifyResponse>(verified)).toMatchObject({ user: { role: "ADMIN" }, redirectTo: "/admin" });
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it("returns a seeded demo admin's code only with the explicit DEMO_ADMIN_SIGNIN=true opt-in", async () => {
+    await fakeDb.user.create({ data: { email: "admin@demo.explorador.pt", role: "ADMIN" } });
+    process.env.DEMO_ADMIN_SIGNIN = "true";
+    resetEnvCache();
+    try {
+      const res = await start(post({ email: "admin@demo.explorador.pt" }));
+      expect(await json<EmailStartResponse>(res)).toMatchObject({ delivery: "demo", demoCode: expect.stringMatching(/^\d{6}$/) });
+    } finally {
+      delete process.env.DEMO_ADMIN_SIGNIN;
+      resetEnvCache();
+    }
   });
 });
 

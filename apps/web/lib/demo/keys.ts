@@ -14,7 +14,11 @@ import { generateAttesterKey, generateNullifierSecret } from "@/lib/zk/keys";
 import { ensureFunded, type Log } from "./accounts";
 import { mergeEnvFile, parseEnvFile } from "./env-file";
 
-/** Seeded admin (spec §11.2 "first ADMIN_EMAILS"): a demo-domain address, so DEMO_MODE shows its sign-in code. */
+/**
+ * Seeded admin (spec §11.2 "first ADMIN_EMAILS"): a demo-domain address (never emailed). In DEMO_MODE
+ * its sign-in code is printed in the server console, and shown on the sign-in page only with the
+ * DEMO_ADMIN_SIGNIN=true opt-in (which lets anyone become admin).
+ */
 export const DEFAULT_ADMIN_EMAIL = "admin@demo.explorador.pt";
 /** Placeholder in .env.example that should not survive into a generated file. */
 const PLACEHOLDER_ADMIN = "you@explorador.ai";

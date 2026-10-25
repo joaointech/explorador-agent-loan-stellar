@@ -49,7 +49,9 @@ export function route<Args extends unknown[]>(handler: (...args: Args) => Promis
       if (err instanceof HttpError) return errorResponse(err.status, err.code, err.message);
       if (err instanceof ZodError) return errorResponse(400, "VALIDATION_ERROR", err.message);
       console.error(err);
-      return errorResponse(500, "INTERNAL", err instanceof Error ? err.message : "Unexpected error");
+      // Unknown errors can carry internals (SQL, hosts, keys in URLs): details only outside production.
+      const detail = err instanceof Error ? err.message : "Unexpected error";
+      return errorResponse(500, "INTERNAL", process.env.NODE_ENV === "production" ? "Unexpected error" : detail);
     }
   };
 }

@@ -3,6 +3,7 @@
 // sponsor. The implementation replaces the stub bodies.
 
 import { notImplemented } from "@/lib/http";
+import type { AgentTxAction } from "@/lib/types/api";
 
 const OWNER = "smart accounts";
 
@@ -27,4 +28,13 @@ export async function deployDemoSmartAccount(_input: {
   label: string;
 }): Promise<DeployedAccount> {
   notImplemented("deployDemoSmartAccount", OWNER);
+}
+
+/** Signs and submits an agent action (e.g. `enable_card`) with a seed agent's server-held demo signer. */
+export async function submitDemoAgentAction(_input: {
+  label: string;
+  smartAccount: string;
+  action: AgentTxAction;
+}): Promise<{ txHash: string }> {
+  notImplemented("submitDemoAgentAction", OWNER);
 }

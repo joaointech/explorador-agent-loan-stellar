@@ -1767,15 +1767,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
-name = "stellar-access"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e5dc69bd3a6d260a5fba6541f0260d0bed3fbfcbb615d2fb00dc95bda94ceaf"
-dependencies = [
- "soroban-sdk",
-]
-
-[[package]]
 name = "stellar-contract-utils"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1893,9 +1884,8 @@ dependencies = [
 name = "teurc"
 version = "0.1.0"
 dependencies = [
+ "advance-shared",
  "soroban-sdk",
- "stellar-access",
- "stellar-macros",
  "stellar-tokens",
 ]
 

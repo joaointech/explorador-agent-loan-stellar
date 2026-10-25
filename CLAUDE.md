@@ -48,6 +48,7 @@ pnpm install                        # from repo root
 pnpm db:up                          # Postgres 16 on localhost:5433 (docker compose)
 pnpm dev                            # Next.js on http://localhost:3000
 pnpm --filter web typecheck|lint|test
+TEST_DATABASE_URL=postgresql://advance:advance@localhost:5433/advance_test pnpm --filter web test   # + DB-backed tests
 cd contracts && cargo test          # contract tests
 pnpm contracts:build                # stellar contract build (wasm32v1-none)
 pnpm circuits:build                 # circom + local trusted setup → apps/web/zk

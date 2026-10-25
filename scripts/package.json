@@ -17,7 +17,8 @@
     "smoke:smart-account": "tsx smoke-smart-account.ts",
     "indexer": "tsx indexer.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lithic:cards": "tsx lithic-cards.ts"
+    "lithic:cards": "tsx lithic-cards.ts",
+    "lithic:clear": "tsx lithic-clear.ts"
   },
   "devDependencies": {
     "@types/node": "^20",

@@ -250,6 +250,8 @@ QA aids: `/agent/preview` (behind an agent session; dev or `DEMO_MODE` only) and
 
 In production (`NODE_ENV=production`) the ASA endpoint fails closed: without `LITHIC_ASA_HMAC_SECRET` it answers 503 `ASA_NOT_CONFIGURED` and Lithic declines the purchase, so enroll before going live. The simulated network runs in-process and doesn't use the endpoint.
 
+An approved Lithic authorization is only a hold, which Lithic lists as **pending** until the merchant clears (captures) it, and nothing clears on its own in the sandbox. The app plays the merchant: once a purchase's on-chain `card_draw` confirms, it calls Lithic's `simulate/clearing`, and the transaction shows as **settled** in Lithic. `pnpm lithic:clear` clears any confirmed purchase still pending (e.g. ones made before this existed). A purchase whose draw never confirms stays pending in Lithic and appears in the admin alerts.
+
 Lithic sandbox amounts are USD cents, which the app treats as EUR cents 1:1 (spec §2). Sandbox writes are limited to 1 per second, so the app spaces simulations 1.1 s apart.
 
 ## Deploying to Vercel + Neon

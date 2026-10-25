@@ -2,6 +2,7 @@
 // approved spend on-chain with `advance_pool.card_draw(agent, amount, auth_ref)`
 // as operator and update the CardAuthorization row:
 //   PENDING → SUBMITTED → CONFIRMED (split + tx hash) | FAILED
+// After a confirmed draw, a Lithic sandbox authorization is cleared (clearing.ts).
 // A row is claimed atomically before submitting, so after(), the status-poll
 // kick and the retry sweep can never draw it twice; and the contract rejects a
 // reused auth_ref (DuplicateDraw), so a resubmission after a lost response is
@@ -13,6 +14,7 @@ import { db, type ChainStatus } from "@/lib/db";
 import { cardDraw } from "@/lib/stellar/contracts";
 import { STROOPS_PER_CENT } from "@/lib/units";
 
+import { clearLithicAuthorization } from "./clearing";
 import { refreshCachedPosition } from "./position";
 
 /** Spec §4.4.6 / §9.5: never more than 3 automatic attempts per draw. */
@@ -97,6 +99,7 @@ export async function executeDraw(authorizationId: string, opts: ExecuteDrawOpti
       data: { chainStatus: "CONFIRMED", fromBalanceStroops: result.fromBalance, fromCreditStroops: result.fromCredit, txHash },
     });
     console.info(`[card] draw ${row.id} confirmed: ${txHash} (attempt ${row.attempts})`);
+    await clearLithicAuthorization(row.lithicToken);
     return "confirmed";
   } catch (err) {
     if (isDuplicateDrawError(err)) {
@@ -107,6 +110,7 @@ export async function executeDraw(authorizationId: string, opts: ExecuteDrawOpti
         data: { chainStatus: "CONFIRMED", ...indexed },
       });
       console.info(`[card] draw ${row.id} had already landed (DuplicateDraw)`);
+      await clearLithicAuthorization(row.lithicToken);
       return "recovered";
     }
     console.error(`[card] draw ${row.id} failed (attempt ${row.attempts}/${MAX_DRAW_ATTEMPTS})`, err);

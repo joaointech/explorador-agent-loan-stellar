@@ -18,6 +18,15 @@ export interface SimulateAuthorizationInput {
   descriptor: string;
 }
 
+/**
+ * Sandbox `POST /v1/simulate/clearing`: the merchant captures an approved
+ * authorization, which moves the Lithic transaction from PENDING to SETTLED.
+ * Clears the authorized amount (clearing adjustments are out of scope, spec §13).
+ */
+export function simulateClearing(token: string): Promise<Lithic.TransactionSimulateClearingResponse> {
+  return simulationWrites(() => getLithic().transactions.simulateClearing({ token }));
+}
+
 /** Resolves to `{ token }`: the Lithic transaction token our ASA handler records. */
 export function simulateAuthorization(input: SimulateAuthorizationInput): Promise<Lithic.TransactionSimulateAuthorizationResponse> {
   return simulationWrites(() =>

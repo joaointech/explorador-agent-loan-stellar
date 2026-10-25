@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The Docker image (deploy/Dockerfile) builds with BUILD_STANDALONE=1: a
+  // self-contained server.js plus only the traced node_modules, instead of the
+  // whole ~860 MB production dependency tree. `next start` and Vercel keep the
+  // default output.
+  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
   // Cache Components is off on purpose: almost every page shows live chain
   // state, so the previous dynamic-by-default model is simpler (DECISIONS.md).
   reactCompiler: true,

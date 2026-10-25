@@ -14,6 +14,10 @@ export const formatShares = (shares: bigint | null | undefined, withSymbol = tru
 export const formatBalance = (stroops: bigint | null | undefined, symbol: string): string =>
   stroops === null || stroops === undefined ? EMPTY_VALUE : formatToken(stroops, { symbol, minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** A limit in euros, floored to the cent (what "Max" fills in), or "—" when unknown. */
+export const formatEurLimit = (stroops: bigint | null | undefined): string =>
+  stroops === null || stroops === undefined ? EMPTY_VALUE : formatEur(stroops > 0n ? stroops / 100_000n : 0n, { unit: "cents" });
+
 /** Euros, or "—" when unknown. */
 export const eurOrDash = (stroops: bigint | string | null | undefined, opts: Parameters<typeof formatEur>[1] = {}): string =>
   stroops === null || stroops === undefined || stroops === "" ? EMPTY_VALUE : formatEur(stroops, opts);

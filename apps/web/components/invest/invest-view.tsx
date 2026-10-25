@@ -49,7 +49,7 @@ export function InvestView({ model, actions }: { model: InvestModel; actions: In
 
   return (
     <>
-      <InvestHero stats={stats} showStats={deployed} />
+      <InvestHero stats={stats} showStats={deployed || deployment.status === "loading"} loading={deployment.status === "loading"} />
       <Container className="flex flex-col gap-12 py-8 sm:gap-16 sm:py-12">
         {(deployment.status !== "ready" && deployment.status !== "loading") && (
           <div className="-mb-4 sm:-mb-8">
@@ -76,6 +76,7 @@ export function InvestView({ model, actions }: { model: InvestModel; actions: In
               position={position}
               explorerBase={explorerBase}
               error={positionError}
+              onRetry={actions.retry}
               className="lg:col-span-7 lg:col-start-1 lg:row-span-2 lg:row-start-1"
             />
             <VaultPanel

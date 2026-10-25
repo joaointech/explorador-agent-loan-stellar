@@ -10,9 +10,9 @@ import { apyText } from "./format";
 import type { Remote } from "./model";
 
 /** Warm hero band: two-tone headline and the four numbers an investor looks at first. */
-export function InvestHero({ stats, showStats }: { stats: Remote<PoolStatsResponse>; showStats: boolean }) {
+export function InvestHero({ stats, showStats, loading: configLoading = false }: { stats: Remote<PoolStatsResponse>; showStats: boolean; loading?: boolean }) {
   const data = stats.data;
-  const loading = !data && stats.loading;
+  const loading = !data && (stats.loading || configLoading);
   const value = (v: string | undefined) => (data ? v : EMPTY_VALUE);
   return (
     <Section tone="warm" spacing="md" dots>

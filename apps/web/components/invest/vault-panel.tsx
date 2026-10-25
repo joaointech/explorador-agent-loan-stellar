@@ -16,7 +16,7 @@ import type { PoolStatsResponse } from "@/lib/types/api";
 import { centsToStroops, STROOPS_PER_EUR } from "@/lib/units";
 import { toWalletError } from "@/lib/wallet/errors";
 
-import { formatBalance, formatShares } from "./format";
+import { formatBalance, formatEurLimit, formatShares } from "./format";
 import { stroopsToEurInput, type InvestActions, type PositionView, type WalletView } from "./model";
 import { TxStatus, useTx } from "./tx-status";
 
@@ -97,7 +97,8 @@ export function VaultPanel({
     invalid = capped ? "More than the pool can pay out right now (idle liquidity)." : "That's more than your position.";
   }
 
-  const previewKey = ready && assets !== null && !invalid && !useMax ? `${mode}:${assets}` : null;
+  // Quotes only need the RPC, so visitors see them before connecting a wallet.
+  const previewKey = deployed && assets !== null && !invalid && !useMax ? `${mode}:${assets}` : null;
 
   const fetchPreview = useEffectEvent(async (key: string, kind: Mode, value: bigint) => {
     try {
@@ -149,16 +150,22 @@ export function VaultPanel({
     });
   };
 
-  // What the primary button does when the wallet isn't ready.
-  const gate = !deployed
-    ? { label: "Pool not deployed yet", onClick: undefined }
-    : wallet.status !== "connected"
-      ? { label: "Connect Freighter", onClick: actions.connect }
-      : wallet.wrongNetwork
-        ? { label: "Switch Freighter to Testnet", onClick: undefined }
-        : position.xlm === null
-          ? { label: "Get test XLM first", onClick: undefined }
-          : null;
+  // What the primary button says (and does) while the wallet isn't ready.
+  const gate: { label: string; onClick?: () => void } | null = !deployed
+    ? { label: "Pool not deployed yet" }
+    : wallet.status === "checking"
+      ? { label: "Looking for Freighter…" }
+      : wallet.status === "unavailable"
+        ? { label: "Install Freighter to deposit" }
+        : wallet.status === "connecting"
+          ? { label: "Approve the connection in Freighter…" }
+          : wallet.status === "disconnected"
+            ? { label: "Connect Freighter", onClick: actions.connect }
+            : wallet.wrongNetwork
+              ? { label: "Switch Freighter to Testnet" }
+              : position.xlm === null
+                ? { label: "Get test XLM first" }
+                : null;
 
   const canSubmit =
     ready && !tx.pending && !invalid && (mode === "deposit" ? assets !== null : useMax ? (position.maxRedeem ?? 0n) > 0n : assets !== null);
@@ -219,7 +226,7 @@ export function VaultPanel({
         </TabsContent>
 
         <TabsContent value="withdraw" className="mt-5 flex flex-col gap-4">
-          {amountField(position.maxWithdraw !== null ? `You can withdraw up to ${formatEur(position.maxWithdraw)} now.` : "Amounts are in euros (1 tEURC = €1).")}
+          {amountField(position.maxWithdraw !== null ? `You can withdraw up to ${formatEurLimit(position.maxWithdraw)} now.` : "Amounts are in euros (1 tEURC = €1).")}
           <div className="flex flex-wrap gap-2" role="group" aria-label="Quick amounts">
             <Chip
               pressed={useMax}

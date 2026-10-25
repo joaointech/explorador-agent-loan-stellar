@@ -37,7 +37,8 @@ export function InvestDashboard() {
   const freighter = useFreighter();
   const [range, setRange] = useState<SnapshotRange>("7d");
 
-  const config = useResource("config", fetchConfig);
+  // Re-read now and then: a demo reset redeploys the contracts under new ids.
+  const config = useResource("config", fetchConfig, { intervalMs: 60_000 });
   const deployed: DeploymentInfo | null = config.data?.deployment ?? null;
   const deployment: DeploymentState = config.data
     ? deployed
@@ -103,6 +104,7 @@ export function InvestDashboard() {
       void config.refresh();
       void stats.refresh();
       void snapshots.refresh();
+      void refreshAccount();
     },
     setRange,
     fundXlm: async (onPhase) => {

@@ -1,7 +1,8 @@
-import { ArrowDownToLine, ArrowUpFromLine, PiggyBank } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, CircleAlert, PiggyBank } from "lucide-react";
 
 import { TxLink } from "@/components/ui/address";
 import { Amount } from "@/components/ui/amount";
+import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardRow } from "@/components/ui/card";
 import { cn } from "@/components/ui/cn";
 import { DateText } from "@/components/ui/date-text";
@@ -9,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton, SkeletonText } from "@/components/ui/skeleton";
 import { EMPTY_VALUE, formatSharePrice } from "@/lib/format";
 
-import { formatShares } from "./format";
+import { formatEurLimit, formatShares } from "./format";
 import type { PositionView } from "./model";
 
 const START_STEPS = [
@@ -82,6 +83,7 @@ export function PositionCard({
   position,
   explorerBase,
   error,
+  onRetry,
   className,
 }: {
   connected: boolean;
@@ -89,6 +91,7 @@ export function PositionCard({
   position: PositionView;
   explorerBase?: string;
   error?: string | null;
+  onRetry?: () => void;
   className?: string;
 }) {
   if (!connected) {
@@ -110,6 +113,25 @@ export function PositionCard({
         <Skeleton className="h-4 w-28" />
         <Skeleton className="h-10 w-48" />
         <SkeletonText lines={4} />
+      </Card>
+    );
+  }
+
+  if (position.shares === null && error) {
+    return (
+      <Card padding="lg" className={className}>
+        <CardHeader eyebrow="Your position" title="Senior vault (eaSR)" />
+        <div role="alert" className="mt-5 flex flex-col items-start gap-3 rounded-xl bg-card-muted p-4 ring-1 ring-line">
+          <p className="flex items-start gap-2 text-sm text-fg">
+            <CircleAlert aria-hidden className="mt-0.5 size-[18px] shrink-0 text-red-500" />
+            Your position couldn&apos;t load ({error}).
+          </p>
+          {onRetry && (
+            <Button size="sm" variant="secondary" onClick={onRetry}>
+              Try again
+            </Button>
+          )}
+        </div>
       </Card>
     );
   }
@@ -149,7 +171,7 @@ export function PositionCard({
         <CardRow label="Deposited" value={<Amount value={position.deposited} />} />
         {position.withdrawn !== null && position.withdrawn > 0n && <CardRow label="Withdrawn" value={<Amount value={position.withdrawn} />} />}
         <CardRow label="Earned" value={<Amount value={position.earned} sign="exceptZero" tone="auto" />} />
-        <CardRow label="Withdrawable now" value={<Amount value={position.maxWithdraw} />} />
+        <CardRow label="Withdrawable now" value={formatEurLimit(position.maxWithdraw)} />
       </div>
       {error && <p className="mt-3 text-xs text-muted">Some figures couldn&apos;t load: {error}</p>}
       <History position={position} explorerBase={explorerBase} />

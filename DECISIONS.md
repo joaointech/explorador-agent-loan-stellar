@@ -29,6 +29,19 @@ Choices made where `spec.md` was silent, or where the product owner gave new dir
 
 ## Web: design system and shell
 
+- 2026-10-25: Where explorador.pt's code (`irrealista/web-public`) differs from the spec §10.1 samples, the code wins: Sora is self-hosted with `next/font/local` (the site's `Sora.woff2` variable font + OFL licence in `app/fonts/`) instead of `next/font/google` (also no build-time network fetch); warm bands are `stone-50` / `stone-100` (`--color-section`, `--color-section-alt`), not `#f6f5f1`; hero h1 is 36 px on phones (60 px at `xl`); primary buttons hover to navy (`--color-primary-hover: #0f172a`), as explorador.pt's CTAs do; header and footer turn slate-900 in dark mode; nav dividers are `blue-200/60`.
+- 2026-10-25: Eyebrows use slate-500 (spec value) rather than the site's slate-400, which fails WCAG AA contrast on white.
+- 2026-10-25: Tokens are semantic CSS variables in `@theme static` (`bg-card`, `text-heading`, `text-muted`, `border-line`, `bg-section`, `text-primary-text`, …) overridden by a `.dark` class on `<html>`, so components need no `dark:` variants. Dark mode is class-based (`@custom-variant dark`), Light/System/Dark persisted in `localStorage.theme` (same key and rule as explorador.pt) and applied by a render-blocking head script (Next.js "preventing flash" inline-script pattern).
+- 2026-10-25: Added `tailwind-merge` 3.7.0 (configured with our tokens in `components/ui/cn.ts`): without it a consumer's `className` could not reliably override a primitive's defaults (e.g. `hidden` vs `inline-flex`), which broke the mobile header during development.
+- 2026-10-25: The app shell (header, footer, toasts, theme sync, lucide 1.5 px stroke via `LucideProvider`) lives in the root layout, so every page gets it without route groups.
+- 2026-10-25: The header reads `getSessionUser()` inside try/catch (with `unstable_rethrow`), treating any failure as signed out. Sign out POSTs to `/api/auth/logout` (constant `SIGN_OUT_ENDPOINT` in `components/shell/nav.ts`; the auth workstream implements the route) and then does a full reload so no client cache survives.
+- 2026-10-25: Demo clock chip: one shared poller of `GET /api/pool/stats` every 30 s (paused while the tab is hidden) behind `useDemoClock()`; `refreshDemoClock()` lets the admin panel update it right after a fast-forward. Desktop shows a chip in the bar; phones get a slim strip under the header. Offsets under a day show as hours (`+3h`).
+- 2026-10-25: Dates are formatted by hand from `Intl` parts (fixed three-letter months) because en-GB ICU now prints "Sept"; day numbers are formatted as UTC calendar days, instants in Europe/Lisbon. Money stays in bigint until Intl formats an exact decimal string; stroops round to the nearest cent, half away from zero.
+- 2026-10-25: Chart series colours are a fixed order validated for colour-vision deficiency on both surfaces (brand blue-600/blue-500, orange, aqua; dataviz validator CVD ΔE ≥ 9). Charts take at most 3 series and one y-axis; they use CSS variables so they follow the theme without JS, and include a screen-reader data table.
+- 2026-10-25: Dialog and Sheet are built on the native `<dialog>` (focus trap, Escape, inert page); Sheet is a bottom sheet below `sm` and a centered dialog above.
+- 2026-10-25: App icons are static files rendered once from explorador's mark (`app/icon.png` 192 px and a 16/32/48 `favicon.ico` with explorador.pt's 20 % rounded tile; `app/apple-icon.png` 180 px full-bleed); the manifest reuses explorador's `icon-192/512.png`.
+- 2026-10-25: Pure formatting helpers stay free of `@/` imports so Vitest runs without a config file (no shared `vitest.config.ts` was added).
+
 ## Web: landing and registry pages
 
 ## Auth and database

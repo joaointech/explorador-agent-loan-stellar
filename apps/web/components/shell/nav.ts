@@ -21,8 +21,8 @@ export interface HeaderUser {
 }
 
 export const SIGN_IN_HREF = "/login";
-/** POST endpoint that clears the session cookie (owned by the auth workstream). */
-export const SIGN_OUT_ENDPOINT = "/api/auth/logout";
+/** DELETE clears the session cookie (auth workstream: app/api/auth/session). */
+export const SIGN_OUT_ENDPOINT = "/api/auth/session";
 
 export function navFor(user: HeaderUser | null): NavLink[] {
   return user?.role === "ADMIN" ? [...PUBLIC_NAV, ADMIN_NAV] : PUBLIC_NAV;
@@ -36,7 +36,7 @@ export function isActivePath(pathname: string, href: string): boolean {
 /** Signs out, then reloads on the landing page so server-rendered UI drops the session. */
 export async function signOut(): Promise<void> {
   try {
-    await fetch(SIGN_OUT_ENDPOINT, { method: "POST" });
+    await fetch(SIGN_OUT_ENDPOINT, { method: "DELETE" });
   } finally {
     // A full document load on purpose: signing out must drop every client
     // cache (router cache, in-memory stores), not just re-render the header.

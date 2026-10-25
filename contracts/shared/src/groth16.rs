@@ -165,10 +165,18 @@ mod test {
             let mut tampered = inputs(&env, note);
             let bumped = add_be(&tampered.get_unchecked(i).to_array(), &one());
             tampered.set(i, BytesN::from_array(&env, &bumped));
-            assert!(!verify(&env, &vk, &proof(&env, note), &tampered), "input {i}");
+            assert!(
+                !verify(&env, &vk, &proof(&env, note), &tampered),
+                "input {i}"
+            );
         }
         // Another note's public inputs with this note's proof.
-        assert!(!verify(&env, &vk, &proof(&env, note), &inputs(&env, &NOTES[1])));
+        assert!(!verify(
+            &env,
+            &vk,
+            &proof(&env, note),
+            &inputs(&env, &NOTES[1])
+        ));
     }
 
     #[test]
@@ -253,7 +261,9 @@ mod test {
         assert!(verify(&env, &vk, &proof, &inputs));
         let cpu = budget.cpu_instruction_cost();
         let mem = budget.memory_bytes_cost();
-        std::println!("groth16::verify (9 public inputs): {cpu} CPU instructions, {mem} memory bytes");
+        std::println!(
+            "groth16::verify (9 public inputs): {cpu} CPU instructions, {mem} memory bytes"
+        );
         // Testnet per-transaction limit (protocol 29, ConfigSettingContractComputeV0
         // tx_max_instructions, read 2026-10-25): 400,000,000 instructions and
         // 40 MiB of memory. Keep verification under a quarter of it.

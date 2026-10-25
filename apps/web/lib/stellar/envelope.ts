@@ -75,9 +75,10 @@ export function signedSorobanEnvelope(input: {
  */
 export function resourceLimitExceeded(result: xdr.TransactionResult | undefined): boolean {
   let outcome: xdr.TransactionResultResult | xdr.InnerTransactionResultResult | undefined = result?.result;
-  if (outcome?.type === "txFeeBumpInnerFailed") outcome = outcome.innerResultPair.result.result;
+  if (outcome?.type === "txFeeBumpInnerFailed") outcome = outcome.innerResultPair?.result?.result;
   if (outcome?.type !== "txFailed") return false;
-  const op = outcome.results[0];
-  if (op?.type !== "opInner" || op.tr.type !== "invokeHostFunction") return false;
-  return op.tr.invokeHostFunctionResult.type === "invokeHostFunctionResourceLimitExceeded";
+  // Defensive: decoded results from RPC (or test doubles) may omit nested parts.
+  const op = outcome.results?.[0];
+  if (op?.type !== "opInner" || op.tr?.type !== "invokeHostFunction") return false;
+  return op.tr.invokeHostFunctionResult?.type === "invokeHostFunctionResourceLimitExceeded";
 }

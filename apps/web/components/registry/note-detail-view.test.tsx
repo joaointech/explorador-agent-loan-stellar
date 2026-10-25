@@ -55,12 +55,19 @@ describe("note detail", () => {
     expect(text).toContain("€349.00 borrowed against this note");
   });
 
-  it("shows Overdue and disables verification without public signals", () => {
+  it("shows Overdue and keeps verification available without the registry's signals (it reads Stellar)", () => {
     const overdue = detailResponse(1, 2, { overdue: true });
     overdue.publicSignals = [];
-    const out = textOf(renderToStaticMarkup(<NoteDetailView detail={overdue} />));
+    const html = renderToStaticMarkup(<NoteDetailView detail={overdue} />);
+    const out = textOf(html);
     expect(out).toContain("Overdue");
-    expect(out).toContain("public signals aren't available yet");
-    expect(renderToStaticMarkup(<NoteDetailView detail={overdue} />)).toMatch(/<button[^>]*disabled=""[^>]*>.*Verify proof/s);
+    expect(out).toContain("The registry didn't return this note's public signals.");
+    expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>.*Verify proof/s);
+  });
+
+  it("lists the six verification steps before the first run", () => {
+    for (const step of ["Load the verifier", "Fetch the verification key", "Read the note from Stellar", "Rebuild the public signals", "Match the proof", "Check the pairing equation"]) {
+      expect(text).toContain(step);
+    }
   });
 });

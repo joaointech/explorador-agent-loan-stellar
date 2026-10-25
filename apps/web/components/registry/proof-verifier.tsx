@@ -1,17 +1,21 @@
 "use client";
 
-import { CircleCheck, CircleX, RotateCw, ShieldCheck } from "lucide-react";
-import { useRef, useState } from "react";
+import { CircleCheck, CircleX, LoaderCircle, RotateCw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
 
+import { Address } from "@/components/ui/address";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
-import { Stepper, type Step, type StepStatus } from "@/components/ui/stepper";
-import type { RegistryDetailResponse } from "@/lib/types/api";
+import { Stepper, type Step, type StepStatus as UiStepStatus } from "@/components/ui/stepper";
+import type { ConfigResponse, RegistryDetailResponse } from "@/lib/types/api";
 
-import type { Groth16Verifier, ProofCheckDeps, ProofCheckResult } from "./proof-check";
+import { fetchJson } from "./api-client";
+import { ChainUnavailableError } from "./chain-errors";
+import type { Groth16Verifier, ProofCheckDeps, ProofCheckResult, StepStatus } from "./proof-check";
 import { PROOF_CHECK_STEPS, VERIFICATION_KEY_URL, type ProofCheckStep } from "./proof-steps";
 
-type StepStates = Record<ProofCheckStep, { status: StepStatus; ms?: number }>;
+type StepState = { status: StepStatus | "idle"; ms?: number; detail?: string };
+type StepStates = Record<ProofCheckStep, StepState>;
 type VerifyState =
   | { phase: "idle" }
   | { phase: "running"; steps: StepStates }
@@ -20,6 +24,7 @@ type VerifyState =
 const initialSteps = (): StepStates => ({
   verifier: { status: "active" },
   key: { status: "idle" },
+  chain: { status: "idle" },
   signals: { status: "idle" },
   proof: { status: "idle" },
   pairing: { status: "idle" },
@@ -30,56 +35,149 @@ export function formatMs(ms: number): string {
   return ms < 1000 ? `${Math.max(1, Math.round(ms))} ms` : `${(ms / 1000).toFixed(2)} s`;
 }
 
-const browserDeps: ProofCheckDeps = {
-  loadVerifier: async () => (await import("snarkjs")).groth16 as Groth16Verifier,
-  loadVerificationKey: async () => {
-    const res = await fetch(VERIFICATION_KEY_URL, { cache: "force-cache" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-};
+const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** What the check needs in the browser: snarkjs, the published key, and Stellar via the deployment's RPC. */
+function browserDeps(noteId: number): ProofCheckDeps {
+  return {
+    loadVerifier: async () => (await import("snarkjs")).groth16 as Groth16Verifier,
+    loadVerificationKey: async () => {
+      // Default cache mode: revalidates, so a new trusted setup is picked up at once.
+      const res = await fetch(VERIFICATION_KEY_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    readChain: async () => {
+      let config: ConfigResponse;
+      try {
+        config = await fetchJson<ConfigResponse>("/api/config");
+      } catch (err) {
+        throw new ChainUnavailableError(`the deployment's contract ids aren't available: ${message(err)}`);
+      }
+      if (!config.deployment) throw new ChainUnavailableError("no contracts are deployed yet");
+      const { readChainSnapshot, rpcView } = await import("./chain-note");
+      return readChainSnapshot(rpcView(config.deployment), noteId, config.deployment.cpcvNote);
+    },
+  };
+}
+
+const wrap = (text: string) => <span className="break-words [overflow-wrap:anywhere]">{text}</span>;
+
+function ResultPanel({ result }: { result: ProofCheckResult }) {
+  let tone: "ok" | "warn" | "fail";
+  let title: string;
+  let body: ReactNode;
+  if (!result.valid) {
+    const index = PROOF_CHECK_STEPS.findIndex((s) => s.id === result.failedStep);
+    tone = "fail";
+    title = "Proof not verified";
+    body = (
+      <>
+        Stopped at step {index + 1} of {PROOF_CHECK_STEPS.length}: {PROOF_CHECK_STEPS[index]?.label.toLowerCase()}.
+        <span className="sr-only"> {result.reason}</span>
+      </>
+    );
+  } else if (result.source === "chain") {
+    tone = "ok";
+    title = "Proof verified on Stellar data";
+    body = (
+      <>
+        Pairing check passed in {formatMs(result.verifyMs)} ({formatMs(result.totalMs)} in total), on the note as stored in{" "}
+        <Address address={result.contractId} label="note contract" copy={false} /> and the attester key registered there. This proof is
+        explorador&apos;s attestation of exactly these public fields.
+      </>
+    );
+  } else {
+    tone = "warn";
+    title = "The math checks out, but not against Stellar";
+    body = (
+      <>
+        Pairing check passed in {formatMs(result.verifyMs)} on the registry&apos;s copy. Stellar couldn&apos;t be read, so this doesn&apos;t confirm the
+        attester key or that these bytes are the ones on-chain. Reason: {wrap(result.chainSkipped)}.
+      </>
+    );
+  }
+  const styles = {
+    ok: {
+      box: "border-emerald-600/20 bg-emerald-50 dark:border-emerald-400/25 dark:bg-emerald-500/10",
+      icon: "text-emerald-600 dark:text-emerald-400",
+      title: "text-emerald-800 dark:text-emerald-300",
+      body: "text-emerald-950/80 dark:text-emerald-100/85",
+    },
+    warn: {
+      box: "border-amber-600/25 bg-amber-50 dark:border-amber-400/25 dark:bg-amber-500/10",
+      icon: "text-amber-600 dark:text-amber-400",
+      title: "text-amber-900 dark:text-amber-300",
+      body: "text-amber-950/80 dark:text-amber-100/85",
+    },
+    fail: {
+      box: "border-red-600/20 bg-red-50 dark:border-red-400/25 dark:bg-red-500/10",
+      icon: "text-red-600 dark:text-red-400",
+      title: "text-red-800 dark:text-red-300",
+      body: "text-red-950/80 dark:text-red-100/85",
+    },
+  }[tone];
+  const Icon = tone === "ok" ? CircleCheck : tone === "warn" ? TriangleAlert : CircleX;
+  return (
+    <div className={cn("flex items-start gap-3 rounded-card border p-4", styles.box)}>
+      <Icon aria-hidden className={cn("mt-0.5 size-6 shrink-0", styles.icon)} />
+      <div className="min-w-0">
+        <p className={cn("font-semibold", styles.title)}>{title}</p>
+        <p className={cn("mt-0.5 text-sm leading-relaxed", styles.body)}>{body}</p>
+      </div>
+    </div>
+  );
+}
 
 /**
- * "Verify proof in your browser" (spec §8.5, §10.2): loads snarkjs and the
- * published verification key on demand, rebuilds the public signals from the
- * note's public fields, checks the served proof is the on-chain one, and runs
- * groth16.verify. Shows each step and how long the pairing check took.
+ * "Verify proof in your browser" (spec §8.5, §10.2): on click, loads snarkjs,
+ * the published verification key and the note as stored on Stellar, rebuilds
+ * the public signals, matches the registry's copy against the chain's, and runs
+ * groth16.verify. Shows each step, how long the pairing check took, and
+ * whether the result rests on Stellar or only on the registry's copy.
  */
 export function ProofVerifier({ detail, className }: { detail: Pick<RegistryDetailResponse, "note" | "publicSignals" | "snarkjsProof">; className?: string }) {
   const [state, setState] = useState<VerifyState>({ phase: "idle" });
   const runId = useRef(0);
-  const canVerify = detail.publicSignals.length === 9;
+  const running = state.phase === "running";
 
   async function verify() {
+    // aria-disabled (not disabled) while running, so keyboard focus stays on the button.
+    if (running) return;
     const id = ++runId.current;
     const live = () => id === runId.current;
     setState({ phase: "running", steps: initialSteps() });
-    const update = (step: ProofCheckStep, status: "active" | "done" | "error", ms?: number) => {
+    const update = (step: ProofCheckStep, status: StepStatus, ms?: number, detailText?: string) => {
       if (!live()) return;
-      setState((s) => (s.phase === "idle" ? s : { ...s, steps: { ...s.steps, [step]: { status, ms } } }));
+      setState((s) => (s.phase === "idle" ? s : { ...s, steps: { ...s.steps, [step]: { status, ms, detail: detailText } } }));
     };
     let result: ProofCheckResult;
     try {
       const { checkNoteProof } = await import("./proof-check");
-      result = await checkNoteProof(detail, browserDeps, update);
+      result = await checkNoteProof(detail, browserDeps(detail.note.id), update);
     } catch (err) {
       update("verifier", "error");
-      result = { valid: false, failedStep: "verifier", reason: `Couldn't load the verifier: ${err instanceof Error ? err.message : String(err)}`, totalMs: 0 };
+      result = { valid: false, failedStep: "verifier", reason: `Couldn't load the verifier: ${message(err)}`, totalMs: 0 };
     }
     if (live()) setState((s) => (s.phase === "idle" ? s : { phase: "done", steps: s.steps, result }));
   }
 
-  const running = state.phase === "running";
   const failure = state.phase === "done" && !state.result.valid ? state.result : null;
-  const failedIndex = failure ? PROOF_CHECK_STEPS.findIndex((s) => s.id === failure.failedStep) : -1;
+  const chainSkipped = state.phase !== "idle" && state.steps.chain.status === "skipped";
   const steps: Step[] = PROOF_CHECK_STEPS.map((s) => {
-    const st = state.phase === "idle" ? { status: "idle" as const, ms: undefined } : state.steps[s.id];
+    const st: StepState = state.phase === "idle" ? { status: "idle" } : state.steps[s.id];
+    const status: UiStepStatus = st.status === "skipped" ? "idle" : st.status;
+    let description: ReactNode = s.description;
+    if (failure?.failedStep === s.id) description = wrap(failure.reason);
+    else if (st.status === "skipped") description = wrap(`Skipped: ${st.detail || "Stellar couldn't be read"}. Using the registry's copy instead.`);
+    else if (s.id === "signals" && chainSkipped) description = "From the registry's copy of the note, with the attester key from its public signals.";
+    else if (s.id === "proof" && chainSkipped) description = "Un-negate A from the registry's copy of the stored bytes and compare with its snarkjs proof.";
     return {
       id: s.id,
       label: s.label,
-      status: st.status,
-      description: failure?.failedStep === s.id ? failure.reason : s.description,
-      meta: st.status === "done" && st.ms !== undefined ? formatMs(st.ms) : undefined,
+      status,
+      description,
+      meta: st.status === "done" && st.ms !== undefined ? formatMs(st.ms) : st.status === "skipped" ? "skipped" : undefined,
     };
   });
 
@@ -96,64 +194,40 @@ export function ProofVerifier({ detail, className }: { detail: Pick<RegistryDeta
           <h2 id="verify-title" className="text-lg font-bold text-heading sm:text-xl">
             Verify proof in your browser
           </h2>
-          <p className="mt-1 text-sm leading-relaxed text-muted">
-            Re-run the zero-knowledge check on your own device. snarkjs fetches explorador&apos;s verification key and checks this note&apos;s
-            proof against its public data. Nothing leaves your browser.
+          <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            Re-run the zero-knowledge check on your own device. Your browser reads the note from Stellar, fetches explorador&apos;s verification key and
+            checks the proof with snarkjs. Nothing is sent anywhere.
           </p>
         </div>
       </div>
 
-      {state.phase === "idle" && (
-        <div className="mt-6">
-          <Button size="lg" icon={<ShieldCheck aria-hidden className="size-5" />} onClick={verify} disabled={!canVerify} fullWidth className="sm:w-auto">
-            Verify proof
-          </Button>
-          {!canVerify && (
-            <p className="mt-3 text-sm text-muted">This note&apos;s public signals aren&apos;t available yet, so there is nothing to check against.</p>
-          )}
-        </div>
-      )}
+      <div className="mt-6">
+        <Button
+          size={state.phase === "idle" ? "lg" : "md"}
+          variant={state.phase === "idle" ? "primary" : "secondary"}
+          icon={
+            running ? (
+              <LoaderCircle aria-hidden className="size-4 animate-spin" />
+            ) : state.phase === "idle" ? (
+              <ShieldCheck aria-hidden className="size-5" />
+            ) : (
+              <RotateCw aria-hidden className="size-4" />
+            )
+          }
+          aria-disabled={running || undefined}
+          onClick={verify}
+          fullWidth
+          className="sm:w-auto"
+        >
+          {running ? "Verifying…" : state.phase === "idle" ? "Verify proof" : "Verify again"}
+        </Button>
+      </div>
+
       <Stepper steps={steps} label={state.phase === "idle" ? "What the check does" : "Proof verification"} className="mt-6" />
-      {state.phase !== "idle" && (
-        <div>
-          <div aria-live="polite" className="mt-5">
-            {state.phase === "done" &&
-              (state.result.valid ? (
-                <div className="flex items-start gap-3 rounded-card border border-emerald-600/20 bg-emerald-50 p-4 dark:border-emerald-400/25 dark:bg-emerald-500/10">
-                  <CircleCheck aria-hidden className="mt-0.5 size-6 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <div>
-                    <p className="font-semibold text-emerald-800 dark:text-emerald-300">Proof verified</p>
-                    <p className="mt-0.5 text-sm text-emerald-900/80 dark:text-emerald-200/80">
-                      Pairing check passed in {formatMs(state.result.verifyMs)} ({formatMs(state.result.totalMs)} in total). This note&apos;s public
-                      data is exactly what explorador&apos;s attested deal proves.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-3 rounded-card border border-red-600/20 bg-red-50 p-4 dark:border-red-400/25 dark:bg-red-500/10">
-                  <CircleX aria-hidden className="mt-0.5 size-6 shrink-0 text-red-600 dark:text-red-400" />
-                  <div>
-                    <p className="font-semibold text-red-800 dark:text-red-300">Proof not verified</p>
-                    <p className="mt-0.5 text-sm text-red-900/80 dark:text-red-200/80">
-                      Stopped at step {failedIndex + 1} of {PROOF_CHECK_STEPS.length}: {PROOF_CHECK_STEPS[failedIndex]?.label.toLowerCase()}.
-                      <span className="sr-only"> {state.result.reason}</span>
-                    </p>
-                  </div>
-                </div>
-              ))}
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="mt-4"
-            icon={<RotateCw aria-hidden className="size-4" />}
-            onClick={verify}
-            loading={running}
-          >
-            {running ? "Verifying…" : "Verify again"}
-          </Button>
-        </div>
-      )}
+
+      <div aria-live="polite" className={cn(state.phase === "done" && "mt-5")}>
+        {state.phase === "done" && <ResultPanel result={state.result} />}
+      </div>
     </section>
   );
 }

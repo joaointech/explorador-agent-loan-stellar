@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Operational scripts (spec §11.1). Run from the repo root, e.g. `pnpm seed`. Env comes from apps/web/.env.local.",
-  "scripts": {},
+  "scripts": {
+    "lithic:enroll": "tsx lithic-enroll.ts"
+  },
   "devDependencies": {
     "@types/node": "^20",
     "tsx": "^4.23.15",

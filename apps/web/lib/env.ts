@@ -46,6 +46,8 @@ const schema = z.object({
 
   LITHIC_API_KEY: optional,
   LITHIC_ASA_HMAC_SECRET: optional,
+  /** Bearer token accepted by /api/cron/* (Vercel Cron sends `Authorization: Bearer $CRON_SECRET`). */
+  CRON_SECRET: optional,
 });
 
 export type Env = z.infer<typeof schema>;

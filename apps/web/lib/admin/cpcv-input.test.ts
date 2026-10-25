@@ -96,6 +96,14 @@ describe("New CPCV input validation", () => {
     expect(errorsOf({ ...valid, commissionRateBps: 1000 })).toEqual({});
   });
 
+  it("asks for an empty sale price or rate in plain words (the form sends NaN), not zod's type error", () => {
+    expect(errorsOf({ ...valid, salePriceCents: NaN, commissionRateBps: NaN })).toEqual({
+      salePriceCents: "Enter the sale price",
+      commissionRateBps: "Enter the commission rate",
+    });
+    expect(errorsOf({ ...valid, salePriceCents: undefined })).toEqual({ salePriceCents: "Enter the sale price" });
+  });
+
   it("requires a positive whole-cent sale price whose commission is not zero", () => {
     expect(errorsOf({ ...valid, salePriceCents: 0 })).toHaveProperty("salePriceCents");
     expect(errorsOf({ ...valid, salePriceCents: 100.5 })).toHaveProperty("salePriceCents");

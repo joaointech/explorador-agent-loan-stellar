@@ -44,6 +44,13 @@ describe("timeline", () => {
     expect(new Set(items.map((i) => i.key)).size).toBe(items.length);
   });
 
+  it("puts the mint before the credit line it opened, as the chain emits them the other way round", () => {
+    const [minted, opened, ...rest] = detailResponse(0).timeline;
+    const items = describeTimeline([opened, minted, ...rest]);
+    expect(items.map((i) => i.title)).toEqual(["Note minted", "Credit line opened", "Card purchase on credit", "Card purchase on credit"]);
+    expect(new Set(items.map((i) => i.key)).size).toBe(items.length);
+  });
+
   it("spells out a settlement, a cancellation and a write-off", () => {
     const settled = describeTimelineEvent({
       type: "NoteSettled",

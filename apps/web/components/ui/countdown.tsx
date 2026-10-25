@@ -75,7 +75,7 @@ export function Countdown({
     <time
       dateTime={iso}
       title={title}
-      className={cn("tabular-nums whitespace-nowrap", overdue && "font-semibold text-orange-600 dark:text-orange-400", className)}
+      className={cn("tabular-nums whitespace-nowrap", overdue && "font-semibold text-orange-700 dark:text-orange-400", className)}
     >
       {text}
     </time>

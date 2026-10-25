@@ -8,6 +8,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { Eyebrow } from "@/components/ui/typography";
 import { postLoginPath } from "@/lib/auth/redirect";
+import { emailSchema } from "@/lib/auth/schemas";
 import type { ApiError, EmailStartResponse, EmailVerifyResponse } from "@/lib/types/api";
 
 type Result<T> = { ok: true; data: T } | { ok: false; code: string; message: string };
@@ -97,7 +98,14 @@ export function LoginForm({ next }: { next?: string }) {
 
   function onEmailSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void requestCode(email);
+    // Same schema as the API, checked here so the message reads "Enter a valid
+    // email address" rather than the API's field-prefixed "email: …".
+    const parsed = emailSchema.safeParse(email);
+    if (!parsed.success) {
+      setError({ code: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message ?? "Enter a valid email address" });
+      return;
+    }
+    void requestCode(parsed.data);
   }
 
   function onCodeSubmit(event: FormEvent<HTMLFormElement>) {
@@ -140,7 +148,7 @@ export function LoginForm({ next }: { next?: string }) {
           </PasskeySignInButton>
         </div>
 
-        <div className="my-6 flex items-center gap-3 text-xs font-medium tracking-wide text-subtle uppercase" role="separator" aria-label="or">
+        <div className="my-6 flex items-center gap-3 text-xs font-medium tracking-wide text-muted uppercase" role="separator" aria-label="or">
           <span className="h-px flex-1 bg-line" />
           or use your email
           <span className="h-px flex-1 bg-line" />
@@ -180,7 +188,7 @@ export function LoginForm({ next }: { next?: string }) {
         <Eyebrow>Sign in</Eyebrow>
         <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-heading">Enter your code</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          {sent?.delivery === "demo" ? "Signing in as the demo agent " : "We sent a 6-digit code to "}
+          {sent?.delivery === "demo" ? "Signing in as the demo account " : "We sent a 6-digit code to "}
           <span className="font-semibold break-words text-heading">{email}</span>. The code expires in 10 minutes.
         </p>
       </div>
@@ -193,7 +201,7 @@ export function LoginForm({ next }: { next?: string }) {
       {sent?.delivery === "demo" && sent.demoCode && (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-primary-tint px-4 py-3 text-sm text-blue-900 ring-1 ring-primary/15 dark:text-blue-200">
           <span>
-            Seeded demo agents have no inbox. Your code is <span className="font-mono font-bold tracking-widest tabular-nums">{sent.demoCode}</span>.
+            Seeded demo accounts have no inbox. Your code is <span className="font-mono font-bold tracking-widest tabular-nums">{sent.demoCode}</span>.
           </span>
           <button type="button" className={linkButton} disabled={pending} onClick={() => onCodeChange(sent.demoCode!)}>
             Use it

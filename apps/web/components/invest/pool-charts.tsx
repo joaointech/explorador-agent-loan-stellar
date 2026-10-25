@@ -5,7 +5,7 @@ import { AreaChart, LineChart } from "@/components/ui/charts";
 import { cn } from "@/components/ui/cn";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Eyebrow } from "@/components/ui/typography";
-import { formatDateTime, formatEur, formatShortDate, formatTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatEur, formatShortDate, formatTime } from "@/lib/format";
 import type { PoolSnapshotPoint, PoolSnapshotsResponse } from "@/lib/types/api";
 import { DAY_SECS, stroopsToEur } from "@/lib/units";
 
@@ -29,12 +29,18 @@ export function timeFormatter(points: Pick<PoolSnapshotPoint, "t">[]): (t: unkno
   return span < DAY_SECS ? (t) => formatTime(t as number) : (t) => formatShortDate(t as number);
 }
 
-/** "25 Oct 2026, 09:12 – 16:40" or "18 Oct – 25 Oct 2026": what the x axis covers. */
-function spanLabel(points: Pick<PoolSnapshotPoint, "t">[]): string | null {
+/**
+ * What the x axis covers: "25 Oct 2026, 09:12 – 16:40", "18 Oct – 25 Oct 2026",
+ * or "25 Oct 2026 – 22 Feb 2027" across a new year (without years that one
+ * would read backwards).
+ */
+export function spanLabel(points: Pick<PoolSnapshotPoint, "t">[]): string | null {
   if (points.length < 2) return null;
   const first = points[0].t;
   const last = points[points.length - 1].t;
-  return last - first < DAY_SECS ? `${formatDateTime(first)} – ${formatTime(last)}` : `${formatShortDate(first)} – ${formatShortDate(last)}`;
+  if (last - first < DAY_SECS) return `${formatDateTime(first)} – ${formatTime(last)}`;
+  const [from, to] = [formatDate(first), formatDate(last)];
+  return from.slice(-4) === to.slice(-4) ? `${formatShortDate(first)} – ${to}` : `${from} – ${to}`;
 }
 
 /** Share price over time and TVL vs outstanding debt (GET /api/pool/snapshots), with one range filter for both. */
@@ -83,6 +89,7 @@ export function PoolCharts({ snapshots, range, onRange }: { snapshots: Remote<Po
             title="eaSR share price over time"
             data={series ? priceData : []}
             x="t"
+            xType="time"
             series={[{ key: "price", label: "Share price" }]}
             formatX={formatX}
             formatY={(v) => `€${v.toFixed(digits)}`}
@@ -100,6 +107,7 @@ export function PoolCharts({ snapshots, range, onRange }: { snapshots: Remote<Po
             title="Pool TVL and outstanding debt over time"
             data={series ? tvlData : []}
             x="t"
+            xType="time"
             series={[
               { key: "tvl", label: "TVL" },
               { key: "debt", label: "Outstanding debt" },

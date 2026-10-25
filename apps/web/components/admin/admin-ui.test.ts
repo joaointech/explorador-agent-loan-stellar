@@ -6,7 +6,7 @@ import type { PoolStats } from "@/lib/types/chain";
 
 import { demoDeal, randomNif } from "./demo-data";
 import { applyPipelineEvent, currentStep, idlePipeline } from "./pipeline-steps";
-import { claimableFees, maxJuniorWithdraw } from "./treasury-cards";
+import { claimableFees, floorToCent, maxJuniorWithdraw } from "./treasury-cards";
 
 const EUR = 10_000_000n;
 
@@ -81,6 +81,13 @@ describe("treasury limits", () => {
   it("fee claims are bounded by fees accrued and pool cash", () => {
     expect(claimableFees(stats({}))).toBe(12n * EUR);
     expect(claimableFees(stats({ poolCash: 5n * EUR }))).toBe(5n * EUR);
+  });
+
+  it("limits are shown rounded down to the cent, like Max fills them in", () => {
+    // €57.2380724 of fees: the form can send at most €57.23, so it must not say €57.24.
+    expect(floorToCent(572_380_724n)).toBe(572_300_000n);
+    expect(floorToCent(572_300_000n)).toBe(572_300_000n);
+    expect(floorToCent(99_999n)).toBe(0n);
   });
 });
 

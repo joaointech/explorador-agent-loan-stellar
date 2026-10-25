@@ -37,6 +37,13 @@ export const claimableFees = (stats: Stats): bigint => atLeastZero(min(BigInt(st
 /** Stroops → editable euros, rounded down to the cent ("1234.56"). */
 const toEurInput = (stroops: bigint) => toDecimalString(stroops / STROOPS_PER_CENT, 2);
 
+/**
+ * A limit rounded down to the cent: what "Max" fills in and the most a form can send.
+ * Shown that way so the hint, the over-limit error and Max agree (a €57.2381 limit
+ * reads €57.23, not €57.24, which the form would reject as "more than €57.24").
+ */
+export const floorToCent = (stroops: bigint): bigint => (stroops / STROOPS_PER_CENT) * STROOPS_PER_CENT;
+
 function AmountAction({
   label,
   action,
@@ -62,6 +69,7 @@ function AmountAction({
   const cents = parseEurToCents(value);
   const stroops = cents === null ? null : cents * STROOPS_PER_CENT;
   const overMax = max !== null && stroops !== null && stroops > max;
+  const shownMax = max === null ? null : floorToCent(max);
   const invalid = cents === null || cents <= 0n;
 
   const submit = async () => {
@@ -90,8 +98,8 @@ function AmountAction({
     >
       <Field
         label={label}
-        error={error ?? (overMax ? `That is more than the ${maxLabel} (${formatEur(max!)})` : undefined)}
-        hint={max !== null ? `${maxLabel[0].toUpperCase()}${maxLabel.slice(1)}: ${formatEur(max)}` : undefined}
+        error={error ?? (overMax ? `That is more than the ${maxLabel} (${formatEur(shownMax!)})` : undefined)}
+        hint={shownMax !== null ? `${maxLabel[0].toUpperCase()}${maxLabel.slice(1)}: ${formatEur(shownMax)}` : undefined}
       >
         <NumberInput value={value} onValueChange={setValue} decimals={2} prefix="€" placeholder="0.00" disabled={pending} />
       </Field>
@@ -99,8 +107,8 @@ function AmountAction({
         <Button type="submit" loading={pending} disabled={invalid}>
           {action}
         </Button>
-        {max !== null && max > 0n && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setValue(toEurInput(max))} disabled={pending}>
+        {shownMax !== null && shownMax > 0n && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setValue(toEurInput(shownMax))} disabled={pending}>
             Max
           </Button>
         )}
@@ -173,7 +181,7 @@ export function FeesCard({ stats, onDone }: { stats: Stats | null; onDone: () =>
       />
       <div className="rounded-xl border border-line px-4 py-1">
         <CardRow label="Fees accrued" value={<Amount value={stats?.feesAccrued} />} />
-        <CardRow label="Claimable now" value={<Amount value={stats ? claimableFees(stats).toString() : null} />} />
+        <CardRow label="Claimable now" value={<Amount value={stats ? floorToCent(claimableFees(stats)).toString() : null} />} />
       </div>
       <AmountAction
         label="Amount to claim"

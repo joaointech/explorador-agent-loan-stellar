@@ -22,7 +22,8 @@ const SR_STATUS: Record<StepStatus, string> = {
   error: "failed",
 };
 
-function StepIcon({ status, index, size }: { status: StepStatus; index: number; size: "sm" | "md" }) {
+/** `busy`: the active step spins (work in progress, e.g. the proof pipeline); otherwise it shows its number (the user's turn). */
+function StepIcon({ status, index, size, busy = true }: { status: StepStatus; index: number; size: "sm" | "md"; busy?: boolean }) {
   const box = size === "sm" ? "size-7 text-xs" : "size-8 text-sm";
   if (status === "done") {
     return (
@@ -33,8 +34,8 @@ function StepIcon({ status, index, size }: { status: StepStatus; index: number; 
   }
   if (status === "active") {
     return (
-      <span className={cn("flex shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary-text ring-4 ring-primary/20", box)}>
-        <LoaderCircle aria-hidden className="size-4 animate-spin" strokeWidth={2} />
+      <span className={cn("flex shrink-0 items-center justify-center rounded-full bg-primary-soft font-bold text-primary-text ring-4 ring-primary/20", box)}>
+        {busy ? <LoaderCircle aria-hidden className="size-4 animate-spin" strokeWidth={2} /> : index + 1}
       </span>
     );
   }
@@ -57,7 +58,8 @@ function StepIcon({ status, index, size }: { status: StepStatus; index: number; 
  * - `vertical` (default): the admin proof pipeline (Validating → Signing
  *   attestation → Generating ZK proof → … → Done), with descriptions and meta.
  * - `horizontal`: compact onboarding rail (email → passkey → card → activate);
- *   labels collapse to the current step on narrow screens.
+ *   labels collapse to the current step on narrow screens. Its current step
+ *   waits for the user, so it shows its number instead of a spinner.
  */
 export function Stepper({
   steps,
@@ -83,7 +85,7 @@ export function Stepper({
               className={cn("relative flex min-w-0 flex-col items-center gap-2 text-center", last ? "flex-none" : "flex-1")}
             >
               <div className="flex w-full items-center">
-                <StepIcon status={step.status} index={i} size="sm" />
+                <StepIcon status={step.status} index={i} size="sm" busy={false} />
                 {!last && (
                   <span
                     aria-hidden

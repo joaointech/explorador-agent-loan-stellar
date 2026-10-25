@@ -59,7 +59,7 @@ function SettlePreview({ row }: { row: AdminCpcvRow }) {
           <>
             <CardRow label={<>Debt repaid (incl. <Amount value={line!.interest} /> interest)</>} value={<Amount value={preview.debtRepaid} />} />
             {preview.carriedRepaid > 0n && <CardRow label="Carried debt from cancelled deals repaid" value={<Amount value={preview.carriedRepaid} />} />}
-            <CardRow label="To the agent's card balance" value={<Amount value={preview.agentPayout} className="text-emerald-600 dark:text-emerald-400" />} />
+            <CardRow label="To the agent's card balance" value={<Amount value={preview.agentPayout} className="text-emerald-700 dark:text-emerald-400" />} />
           </>
         ) : (
           <CardRow label="Agent's half (debt and interest repaid first)" value={<Amount value={row.agentCommission} />} />

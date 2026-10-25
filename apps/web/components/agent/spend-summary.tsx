@@ -42,6 +42,14 @@ export function SpendSummary({ data }: { data: Overview }) {
   const card = cardState(data);
   const hasLines = (position?.lines.length ?? 0) > 0;
   const apr = formatBps(data.rates.agentAprBps);
+  // Agents whose deals all settled or fell through aren't waiting for their *first* note.
+  const creditHint = position?.blocked
+    ? "Blocked after a write-off: no new credit."
+    : hasLines
+      ? "50% of your commission on active deals, minus debt."
+      : data.deals.length > 0
+        ? "Opens again when explorador mints your next CPCV Note."
+        : "Opens when explorador mints your first CPCV Note.";
 
   const disabledReason =
     position === null
@@ -73,7 +81,7 @@ export function SpendSummary({ data }: { data: Overview }) {
         <Row label="Card balance" hint="Paid out by settled deals. Spent first." value={position ? <Amount value={position.cardBalance} /> : "—"} />
         <Row
           label="Credit available"
-          hint={hasLines ? "50% of your commission on active deals, minus debt." : "Opens when explorador mints your first CPCV Note."}
+          hint={creditHint}
           value={position ? <Amount value={position.borrowableNow} /> : "—"}
         />
         <Row

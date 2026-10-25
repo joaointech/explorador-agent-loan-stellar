@@ -18,7 +18,7 @@ function Row({ label, value, strong = false }: { label: ReactNode; value: ReactN
   return (
     <div className={cn("flex items-baseline justify-between gap-4 border-b border-line py-2.5 last:border-0", strong && "pt-3")}>
       <dt className={cn("text-sm", strong ? "font-semibold text-heading" : "text-muted")}>{label}</dt>
-      <dd className={cn("shrink-0 text-right tabular-nums", strong ? "text-lg font-bold text-emerald-600 dark:text-emerald-400" : "text-sm font-semibold text-heading")}>
+      <dd className={cn("shrink-0 text-right tabular-nums", strong ? "text-lg font-bold text-emerald-700 dark:text-emerald-400" : "text-sm font-semibold text-heading")}>
         {value}
       </dd>
     </div>

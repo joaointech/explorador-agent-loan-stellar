@@ -114,7 +114,7 @@ function PublicSignalsPanel({ signals, className }: { signals: string[]; classNa
                     {r.reading} <span className="font-mono text-xs font-normal text-muted">({r.value})</span>
                   </p>
                 )}
-                {r.kind === "field" && <p className="mt-1 font-mono text-[11px] break-all text-subtle">{r.value}</p>}
+                {r.kind === "field" && <p className="mt-1 font-mono text-[11px] break-all text-muted">{r.value}</p>}
               </div>
             </li>
           ))}
@@ -234,7 +234,7 @@ export function NoteDetailView({ detail, protocolNow }: { detail: RegistryDetail
               }
               hint={
                 note.overdue ? (
-                  <span className="font-semibold text-orange-600 dark:text-orange-400">Overdue</span>
+                  <span className="font-semibold text-orange-700 dark:text-orange-400">Overdue</span>
                 ) : protocolNow && note.status === "Active" ? (
                   <DateText value={note.escrituraDay} format="relative" now={protocolNow} />
                 ) : (

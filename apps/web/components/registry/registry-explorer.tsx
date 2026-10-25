@@ -48,7 +48,7 @@ function StatusFilter({ value, onChange }: { value: RegistryStatus | null; onCha
             aria-pressed={selected}
             onClick={() => onChange(f.value)}
             className={cn(
-              "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold ring-1 transition-colors",
+              "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold ring-1 transition-colors",
               selected ? "bg-primary text-primary-fg ring-primary" : "bg-card text-fg ring-line hover:bg-primary-tint hover:text-primary-text",
             )}
           >
@@ -114,7 +114,7 @@ function RegistrySearch({ value, onSearch }: { value: string; onSearch: (q: stri
             setDraft("");
             if (value) onSearch("");
           }}
-          className="absolute inset-y-0 right-1 my-auto inline-flex size-9 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-slate-100 hover:text-fg dark:hover:bg-slate-800"
+          className="absolute inset-y-0 right-1 my-auto inline-flex size-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-slate-100 hover:text-fg dark:hover:bg-slate-800"
         >
           <X aria-hidden className="size-4" />
         </button>

@@ -61,9 +61,14 @@ const writeOff = (id: string) => writeOffRoute(post(`/api/admin/agents/${id}/wri
 
 const GRACE_DEADLINE = PROTOCOL_NOW + 30 * DAY;
 
+const EVENT_TX_PREFIX = "admin-actions-test-";
+
 describe.skipIf(!hasTestDb)("admin actions and reads (test database)", () => {
   beforeAll(() => fx.cleanup());
-  afterAll(() => fx.cleanup());
+  afterAll(async () => {
+    await fx.cleanup();
+    await db.chainEvent.deleteMany({ where: { txHash: { startsWith: EVENT_TX_PREFIX } } });
+  });
 
   beforeEach(() => {
     session.requireAdmin.mockReset().mockResolvedValue({ userId: "admin", email: "admin@explorador.ai", role: "ADMIN", passkeyVerified: true });
@@ -158,13 +163,30 @@ describe.skipIf(!hasTestDb)("admin actions and reads (test database)", () => {
   });
 
   describe("write-off", () => {
-    it("refuses before the grace deadline (no transaction), then writes off and marks only that agent's cancelled CPCVs", async () => {
+    it("refuses before the grace deadline (no transaction), then writes off and marks only that agent's cancelled CPCVs that carried debt", async () => {
       const agent = await fx.agent();
       const other = await fx.agent();
       const cancelledA = await fx.cpcv(agent.userId, { status: "CANCELLED", noteId: nextNoteId() });
       const cancelledB = await fx.cpcv(agent.userId, { status: "CANCELLED", noteId: nextNoteId() });
+      const cancelledNoDebt = await fx.cpcv(agent.userId, { status: "CANCELLED", noteId: nextNoteId() });
       const settled = await fx.cpcv(agent.userId, { status: "SETTLED", noteId: nextNoteId() });
       const othersCancelled = await fx.cpcv(other.userId, { status: "CANCELLED", noteId: nextNoteId() });
+      // Indexed cancellations: one carried debt, one carried none (the agent never drew on that note).
+      for (const [row, debtCarried, idx] of [
+        [cancelledA, "20000000000", 0],
+        [cancelledNoDebt, "0", 1],
+      ] as const) {
+        await db.chainEvent.create({
+          data: {
+            contract: "CPOOL",
+            type: "NoteCancelled",
+            ledger: 1,
+            txHash: `${EVENT_TX_PREFIX}${txHash()}`,
+            eventIdx: idx,
+            data: { noteId: row.noteId, agent: agent.smartAccount, debtCarried, graceDeadline: String(GRACE_DEADLINE) },
+          },
+        });
+      }
       chain.readAgentPosition.mockResolvedValue(position({ carriedDebt: 2_000n * EUR, graceDeadline: BigInt(GRACE_DEADLINE) }));
 
       const early = await writeOff(agent.userId);
@@ -179,10 +201,13 @@ describe.skipIf(!hasTestDb)("admin actions and reads (test database)", () => {
       expect(await res.json()).toEqual({ txHash: "writeoff-tx", explorerUrl: "https://stellar.expert/explorer/testnet/tx/writeoff-tx", writtenOff: 2 });
       expect(chain.writeOff).toHaveBeenCalledWith(agent.smartAccount);
 
-      const statuses = await db.cpcv.findMany({ where: { id: { in: [cancelledA.id, cancelledB.id, settled.id, othersCancelled.id] } }, select: { id: true, status: true } });
+      const ids = [cancelledA.id, cancelledB.id, cancelledNoDebt.id, settled.id, othersCancelled.id];
+      const statuses = await db.cpcv.findMany({ where: { id: { in: ids } }, select: { id: true, status: true } });
       expect(Object.fromEntries(statuses.map((s) => [s.id, s.status]))).toEqual({
         [cancelledA.id]: "WRITTEN_OFF",
+        // Not indexed yet: written off with the rest (the agent's carried debt is gone).
         [cancelledB.id]: "WRITTEN_OFF",
+        [cancelledNoDebt.id]: "CANCELLED",
         [settled.id]: "SETTLED",
         [othersCancelled.id]: "CANCELLED",
       });

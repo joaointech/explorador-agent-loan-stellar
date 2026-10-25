@@ -6,10 +6,12 @@
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { HttpError, notFound } from "@/lib/http";
+import { dataBigInt, dataNumber, EventType } from "@/lib/indexer/events";
 import {
   cancelNote,
   claimFees,
   explorerUrl,
+  getDeployment,
   juniorDeposit,
   juniorWithdraw,
   readAgentPosition,
@@ -86,7 +88,26 @@ export const settleCpcv = (id: string) => noteAction(id, "settle");
 /** Buyer walked away: `advance_pool.cancel(note_id)` (operator) → CANCELLED; the debt becomes carried debt. */
 export const cancelCpcv = (id: string) => noteAction(id, "cancel");
 
-/** `advance_pool.write_off(agent)` after the grace deadline; the agent's cancelled CPCVs become WRITTEN_OFF. */
+/**
+ * Note ids of the agent's cancellations that carried no debt, from indexed
+ * NoteCancelled events: nothing of theirs is written off, so they stay
+ * CANCELLED (the same rule the indexer applies on DebtWrittenOff).
+ */
+async function zeroDebtCancellations(agent: string): Promise<number[]> {
+  const pool = await getDeployment()
+    .then((d) => d?.advancePool ?? null)
+    .catch(() => null);
+  const events = await db.chainEvent.findMany({
+    where: { type: EventType.NoteCancelled, ...(pool ? { contract: pool } : {}), data: { path: ["agent"], equals: agent } },
+    select: { data: true },
+  });
+  return events
+    .filter((e) => dataBigInt(e.data, "debtCarried") === 0n)
+    .map((e) => dataNumber(e.data, "noteId"))
+    .filter((n): n is number => n !== null);
+}
+
+/** `advance_pool.write_off(agent)` after the grace deadline; the agent's cancelled CPCVs (that carried debt) become WRITTEN_OFF. */
 export async function writeOffAgent(userId: string): Promise<AdminWriteOffResponse> {
   return exclusive(`agent:${userId}`, async () => {
     const agent = await db.agent.findUnique({ where: { userId }, select: { smartAccount: true, user: { select: { email: true } } } });
@@ -105,7 +126,11 @@ export async function writeOffAgent(userId: string): Promise<AdminWriteOffRespon
     const { txHash } = await writeOff(agent.smartAccount).catch((err: unknown) => {
       throw chainHttpError(err);
     });
-    const { count } = await db.cpcv.updateMany({ where: { agentId: userId, status: "CANCELLED" }, data: { status: "WRITTEN_OFF" } });
+    const zeroDebt = await zeroDebtCancellations(agent.smartAccount).catch(() => []);
+    const { count } = await db.cpcv.updateMany({
+      where: { agentId: userId, status: "CANCELLED", ...(zeroDebt.length > 0 ? { NOT: { noteId: { in: zeroDebt } } } : {}) },
+      data: { status: "WRITTEN_OFF" },
+    });
     return { txHash, explorerUrl: explorerUrl("tx", txHash), writtenOff: count };
   });
 }

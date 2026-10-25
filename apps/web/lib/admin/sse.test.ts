@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { HttpError } from "@/lib/http";
+import { ContractError, TxError } from "@/lib/stellar/errors";
 
 import { chainHttpError, contractErrorCode } from "./chain-errors";
 import { encodeSseEvent, sseStream } from "./sse";
@@ -87,5 +88,20 @@ describe("chain errors", () => {
     expect(chainHttpError(new Error("socket hang up"))).toMatchObject({ status: 502, code: "CHAIN_ERROR", message: "Stellar call failed: socket hang up" });
     const stub = new HttpError(501, "NOT_IMPLEMENTED", "mintNote is not implemented yet");
     expect(chainHttpError(stub)).toBe(stub);
+  });
+
+  it("rewords lib/stellar's typed contract errors and names failed transactions", () => {
+    const contract = new ContractError(6, "junior_withdraw");
+    expect(contractErrorCode(contract)).toBe(6);
+    expect(chainHttpError(contract, { 6: "Too much leverage" })).toMatchObject({ status: 409, code: "LEVERAGE_CAP_EXCEEDED", message: "Too much leverage" });
+    // Keeps lib/stellar's status (InvalidProof → 400) with the admin wording.
+    expect(chainHttpError(new ContractError(13, "mint"))).toMatchObject({ status: 400, code: "INVALID_PROOF", message: "The note contract rejected the zero-knowledge proof" });
+    expect(chainHttpError(new ContractError(10, "write_off", undefined, "f00d"))).toMatchObject({
+      code: "GRACE_NOT_OVER",
+      message: "The grace period has not ended yet (transaction f00d)",
+    });
+    const timeout = chainHttpError(new TxError("TX_TIMEOUT", "settle was not confirmed in 75 s", "beef"));
+    expect(timeout).toMatchObject({ status: 504, code: "TX_TIMEOUT", message: "settle was not confirmed in 75 s (transaction beef)" });
+    expect(contractErrorCode(new Error("settle: LineNotActive (contract error #9)"))).toBe(9);
   });
 });

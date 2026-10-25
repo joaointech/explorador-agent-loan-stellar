@@ -13,7 +13,7 @@ import { centsToStroops } from "@/lib/units";
 
 import { listAdminAgents } from "./agents";
 import { shortMessage } from "./chain-errors";
-import { clockFrom } from "./clock";
+import { adminClock } from "./clock";
 
 const FAILED_DRAWS_LIMIT = 50;
 
@@ -53,7 +53,7 @@ export async function getAdminOverview(): Promise<AdminOverviewResponse> {
   if (!deploymentRead.ok) warnings.push(`Deployment unavailable: ${shortMessage(deploymentRead.reason)}`);
 
   const clock = stats
-    ? clockFrom(stats.protocolNow, stats.params.demoMode)
+    ? adminClock(stats)
     : { protocolNow: Math.floor(Date.now() / 1000), offsetSecs: 0, demoMode: env().DEMO_MODE };
   const agents = await listAdminAgents(stats ? clock : null);
 

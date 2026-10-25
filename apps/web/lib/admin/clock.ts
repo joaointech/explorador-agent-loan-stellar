@@ -5,8 +5,10 @@
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { HttpError } from "@/lib/http";
+import { demoClock } from "@/lib/pool/clock";
 import { advanceClock, explorerUrl, readAgentPosition, readPoolStats } from "@/lib/stellar/contracts";
 import type { AdvanceClockRequest, AdvanceClockResponse, DemoClock } from "@/lib/types/api";
+import type { PoolStats } from "@/lib/types/chain";
 import { DAY_SECS } from "@/lib/units";
 
 import { chainHttpError } from "./chain-errors";
@@ -17,24 +19,19 @@ export const MAX_ADVANCE_SECS = 400 * DAY_SECS;
 const DEADLINE_MARGIN_SECS = 60;
 
 /**
- * demo_offset = protocol_now − ledger time. The pool has no view for it, so it
- * is estimated against the wall clock (ledger time trails it by a few seconds)
- * and rounded to the minute; offsets under a minute read as 0.
+ * The header chip's clock (lib/pool/clock: `demo_offset` estimated against the
+ * wall clock), with `demoMode` also requiring DEMO_MODE=true on this server,
+ * since the admin routes refuse to move the clock otherwise.
  */
-export function estimateOffsetSecs(protocolNow: number, nowMs: number = Date.now()): number {
-  return Math.max(0, Math.round((protocolNow - Math.floor(nowMs / 1000)) / 60) * 60);
-}
-
-export function clockFrom(protocolNow: bigint | number, chainDemoMode: boolean): DemoClock {
-  const now = Number(protocolNow);
-  return { protocolNow: now, offsetSecs: estimateOffsetSecs(now), demoMode: env().DEMO_MODE && chainDemoMode };
+export function adminClock(stats: Pick<PoolStats, "protocolNow" | "params">): DemoClock {
+  const clock = demoClock(stats);
+  return { ...clock, demoMode: env().DEMO_MODE && clock.demoMode };
 }
 
 /** The protocol clock from `stats()`, or null when the chain can't be read. */
 export async function readDemoClock(): Promise<DemoClock | null> {
   try {
-    const stats = await readPoolStats();
-    return clockFrom(stats.protocolNow, stats.params.demoMode);
+    return adminClock(await readPoolStats());
   } catch (err) {
     console.warn(`[admin] protocol clock unavailable: ${err instanceof Error ? err.message : String(err)}`);
     return null;

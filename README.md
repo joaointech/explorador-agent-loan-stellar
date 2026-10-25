@@ -215,7 +215,7 @@ pnpm e2e              # optional: the full flow on testnet, on its own database 
 Notes:
 
 - **You deploy your own contracts.** The live deployment answers only to the keys that created it, and those keys are not in the repo. `pnpm deploy:testnet` rewrites `deployments/testnet.json`, so don't commit that file unless you mean to replace the live record.
-- `pnpm keys:generate` never overwrites a value that is already set (use `--force` to replace). Other flags: `--app-url`, `--admin-emails`, `--database-url`, `--no-fund`. Unless you pass `--admin-emails` (or already set a real address), it sets `ADMIN_EMAILS=admin@demo.explorador.pt`, so the seeded admin can sign in without an inbox (see below). Every variable is documented in [`apps/web/.env.example`](./apps/web/.env.example).
+- `pnpm keys:generate` never overwrites a value that is already set (use `--force` to replace). Other flags: `--app-url`, `--admin-emails`, `--database-url`, `--no-fund`. Unless you pass `--admin-emails` (or already set a real address), it sets `ADMIN_EMAILS=admin@demo.explorador.pt`, a seeded admin with no inbox whose sign-in code goes to the server console (see below). Every variable is documented in [`apps/web/.env.example`](./apps/web/.env.example).
 - `pnpm seed` needs a fresh `DEMO_MODE` deployment (it refuses if any note exists). `pnpm demo:reset` redeploys from the uploaded wasm and reseeds in one go (about 165 s).
 - Everything is paid in testnet XLM. Fees swing wildly on testnet (see [Testnet caveats](#testnet-caveats)). The scripts fee-bump large transactions and top up payers from Friendbot; `pnpm --filter @advance/scripts fund` tops the role accounts up on demand.
 - `pnpm indexer` runs the event indexer in a loop. It is optional: the API syncs on read.
@@ -228,11 +228,11 @@ Everyone signs in at `/login` with an email and a 6-digit code (with a passkey o
 
 | Who | How |
 |---|---|
-| Seed agents | `ana@demo.explorador.pt` (Ana Costa), `bruno@demo.explorador.pt` (Bruno Ferreira), `carla@demo.explorador.pt` (Carla Mendes). Demo accounts have no inbox: while `DEMO_MODE=true` the code is shown on the login page ("Use it"). Their smart accounts use a server-held Ed25519 demo signer, so they never see a passkey prompt. |
-| Admin | The first address in `ADMIN_EMAILS`, created by the seed. `keys:generate` defaults to `admin@demo.explorador.pt`, which signs in with the on-screen code like the seed agents. |
+| Seed agents | `ana@demo.explorador.pt` (Ana Costa), `bruno@demo.explorador.pt` (Bruno Ferreira), `carla@demo.explorador.pt` (Carla Mendes). Demo accounts have no inbox: while `DEMO_MODE=true` their code is shown on the login page ("Use it"). Their smart accounts use a server-held Ed25519 demo signer, so they never see a passkey prompt. |
+| Admin | The first address in `ADMIN_EMAILS`, created by the seed. `keys:generate` defaults to `admin@demo.explorador.pt`. That account has no inbox, and its code is shown on the login page only with `DEMO_ADMIN_SIGNIN=true`; otherwise it is printed in the server console (the `pnpm dev` output, or the Vercel logs). On a public deployment, use a real address and Resend. |
 | New agents | Any other email. The code goes out through Resend, or to the server console when `RESEND_API_KEY` is unset. Then: create one passkey → the sponsor deploys the agent's smart account and a card is issued → **Activate card** (one passkey prompt authorizes `enable_card`). |
 
-> **Demo-mode caveat.** While `DEMO_MODE=true`, anyone who knows a `@demo.explorador.pt` address can sign in as that account. That includes the demo admin, who can mint CPCVs, settle, cancel and write off, move treasury funds, fast-forward the protocol clock and reset the demo. Everything is testnet, so the worst case is a vandalized demo. For anything more, put a real address first in `ADMIN_EMAILS` (the seeded admin then signs in with an emailed code). Alternatively set `DEMO_MODE=false`, which also turns off demo sign-in, the demo clock and Reset demo.
+> **Demo-mode caveat.** While `DEMO_MODE=true`, anyone who knows a seed agent's address can sign in as that agent. The damage is limited to spending testnet credit. `DEMO_ADMIN_SIGNIN=true` goes much further: it lets anyone sign in as the demo admin, who can read decrypted CPCV data, mint, settle, cancel and write off, move treasury funds, fast-forward the protocol clock and reset the demo. Use it only for a private demo, never on a public deployment. `DEMO_MODE=false` turns off seed sign-in, the demo clock and Reset demo.
 
 QA aids: `/agent/preview` (behind an agent session; dev or `DEMO_MODE` only) and `/invest/preview?state=…` render every state from fixtures (nothing is signed or sent), and `/design` shows the design system.
 
@@ -246,6 +246,8 @@ QA aids: `/agent/preview` (behind an agent session; dev or `DEMO_MODE` only) and
 2. Expose the dev server: `cloudflared tunnel --url http://localhost:3000` or `ngrok http 3000`.
 3. Enroll the ASA responder: `pnpm lithic:enroll --url https://<tunnel-host>`. It prints `LITHIC_ASA_HMAC_SECRET=whsec_…`; add that line to `.env.local` and restart. `--status` and `--disenroll` handle housekeeping.
 4. Lithic starts signing ASA requests a few minutes after the secret is first created. Once the secret is set, unsigned requests are rejected, so early purchases may decline; wait and retry.
+
+In production (`NODE_ENV=production`) the ASA endpoint fails closed: without `LITHIC_ASA_HMAC_SECRET` it answers 503 `ASA_NOT_CONFIGURED` and Lithic declines the purchase, so enroll before going live. The simulated network runs in-process and doesn't use the endpoint.
 
 Lithic sandbox amounts are USD cents, which the app treats as EUR cents 1:1 (spec §2). Sandbox writes are limited to 1 per second, so the app spaces simulations 1.1 s apart.
 
@@ -271,7 +273,7 @@ Lithic sandbox amounts are USD cents, which the app treats as EUR cents 1:1 (spe
    ```
 
    This redeploys the contracts from the uploaded wasm and seeds Neon. It also records the active `Deployment` row (until that row exists the app reports "not deployed") and rewrites `deployments/testnet.json`. Commit that file so the documented ids match production. Admin → Demo → **Reset demo** on the production site does the same with the deployment's own `APP_URL`, but cannot update `deployments/testnet.json` (read-only filesystem).
-7. **Lithic in production:** `pnpm lithic:enroll --url https://advance.explorador.ai`, put the printed `LITHIC_ASA_HMAC_SECRET` in Vercel, and redeploy.
+7. **Lithic in production:** `pnpm lithic:enroll --url https://advance.explorador.ai`, put the printed `LITHIC_ASA_HMAC_SECRET` in Vercel, and redeploy. Without the secret, production declines every Lithic purchase.
 8. **Crons.** `vercel.json` runs `/api/cron/sync` at 03:00 and `/api/cron/retry-draws` at 03:30 UTC, **once a day**. That is the Hobby-plan limit: Hobby crons run at most daily with ±59 min precision, and more frequent expressions fail the deployment. On Pro, tighten them, e.g. `*/5 * * * *` and `*/10 * * * *`. Both are safety nets: reads already sync the indexer on demand, and every admin dashboard load runs the card-draw retry sweep.
 
 ## Testing
@@ -280,14 +282,14 @@ Lithic sandbox amounts are USD cents, which the app treats as EUR cents 1:1 (spe
 |---|---|---|
 | Contracts | `pnpm contracts:test` | 99 passed, 16 ignored (wasm-only) |
 | Contracts on the optimized wasm | `pnpm contracts:build && cd contracts && cargo test --workspace -- --ignored` | 16 passed |
-| Web (Vitest) | `pnpm --filter web test` | 654 passed; database-backed files skipped |
-| Web incl. database tests | `TEST_DATABASE_URL=… pnpm --filter web test` | 727 passed, 1 skipped (opt-in testnet test) |
+| Web (Vitest) | `pnpm --filter web test` | 724 passed; database-backed files skipped |
+| Web incl. database tests | `TEST_DATABASE_URL=… pnpm --filter web test` | 797 passed, 1 skipped (opt-in testnet test) |
 | Circuit | `pnpm circuits:test` | 21 passed |
 | Types, lint, build | `pnpm typecheck`, `pnpm lint`, `pnpm build` | clean |
 | End to end on testnet | `pnpm e2e` | 35 checks passed in 107 s |
 
 - **Contracts.** Groth16 verification of committed snarkjs proofs (plus tampered inputs, tampered proofs and non-canonical inputs) and every `cpcv_note` mint rule: duplicate nullifier or commitment, wrong attester key or nullifier-secret commitment, escritura in the past, wrong recipient, soulbound. On the pool: vault math, the worked example (€88.77 / €4,411.23 single accrual, ≈ €90.08 with daily accruals), draw order, the credit, liquidity and leverage caps, settle with and without carried debt, cancel → grace → write-off (junior first), duplicate `auth_ref`, `advance_clock`, and an **invariant fuzz test** (3 seeds × 600 random operations, spec §5.3 checked after every operation with zero tolerance). `contracts/integration_tests` wires the three real contracts with strict authorization and replays the lifecycle on native code and on the optimized wasm, including size and per-transaction cost checks against testnet limits.
-- **Web.** ASA decisions (approve, insufficient funds, idempotent retry, unknown card, signatures), `agent_field` parity, `property_hash`, proof formatting round trips, interest display math, auth and sessions, the admin pipeline and actions, the indexer and read models, investor transactions, and server-rendered UI states. To run the database tests, create a separate database once:
+- **Web.** ASA decisions (approve, insufficient funds, idempotent retry, unknown card, signatures), `agent_field` parity, `property_hash`, proof formatting round trips, the registry's in-browser proof check, interest display math, auth and sessions, the admin pipeline and actions, the indexer and read models, investor transactions, and server-rendered UI states. To run the database tests, create a separate database once:
 
   ```bash
   docker compose exec postgres createdb -U advance advance_test
@@ -304,9 +306,9 @@ Lithic sandbox amounts are USD cents, which the app treats as EUR cents 1:1 (spe
 
 Before you start: `pnpm demo:reset` (or Admin → Demo → **Reset demo**) for a fresh seeded state, Freighter on Testnet, and a phone (or a narrow window) for the agent. Signing up a new agent (email code + passkey → **Activate card**) takes a minute, so do it beforehand unless you want to show it live.
 
-1. **Registry and pool** (`/registry`, `/invest`). "Every deal is on-chain, with no personal data: agent addresses only, counts by status." Open a note and click **Verify proof in your browser**. On `/invest`: "Investors earn yield from agents' advances, protected by explorador's first-loss capital": senior and junior assets, coverage, utilization, leverage against the 10× cap, target, projected and trailing APY.
+1. **Registry and pool** (`/registry`, `/invest`). "Every deal is on-chain, with no personal data: agent addresses only, counts by status." Open a note and click **Verify proof in your browser**: the page re-reads the note, the attester key and the verification key from the contract and checks the Groth16 proof with snarkjs. On `/invest`: "Investors earn yield from agents' advances, protected by explorador's first-loss capital": senior and junior assets, coverage, utilization, leverage against the 10× cap, target, projected and trailing APY.
 2. **Investor.** Connect Freighter, **Get test XLM**, **Get 10,000 tEURC**, deposit €5,000. The eaSR shares, their value and the share price appear.
-3. **Admin.** Sign in as admin, open **New CPCV**, click **Fill with demo data** (the worked example: €300,000 at 5%, escritura in 90 protocol days), pick the agent and submit. Watch the pipeline: *Validating → Signing attestation → Generating ZK proof → Verifying proof locally → Minting note on Stellar → Done*. The mint transaction is where `cpcv_note` verified the Groth16 proof on-chain. Open the note in the registry and verify the proof in the browser.
+3. **Admin.** Sign in as admin: a real `ADMIN_EMAILS` address, or the seeded demo admin with its code from the server log (`DEMO_ADMIN_SIGNIN=true` puts it on screen for a private demo). Open **New CPCV**, click **Fill with demo data** (the worked example: €300,000 at 5%, escritura in 90 protocol days), pick the agent and submit. Watch the pipeline: *Validating → Signing attestation → Generating ZK proof → Verifying proof locally → Minting note on Stellar → Done*. The mint transaction is where `cpcv_note` verified the Groth16 proof on-chain. Open the note in the registry and verify the proof in the browser.
 4. **Agent (phone).** Available to spend: **€3,750**. If you minted the note for a seed agent such as Carla instead, her credit available shows the same €3,750, next to her card balance from an earlier settlement. Simulate "Pastelaria Aloma €4.80" and "Worten €349.00": approved by the card-network flow, then confirmed on Stellar within seconds with a tx link. Debt and interest tick up live.
 5. **Escritura.** Admin → Demo → **+30 days**: the demo clock chip in the header (already at +120 days from the seed) moves on, and interest jumps. Then CPCVs → **Confirm escritura**; the dialog previews debt and interest repaid, the card-balance payout and explorador's €7,500 junior deposit. The agent's debt disappears and the payout (the "€4,411.23" of the worked example, with these purchases instead) lands on the card balance. On `/invest` the share price has moved up.
 6. **What if the buyer walks away?** Admin → CPCVs → **Cancel (buyer withdrew)** on Bruno's active Braga deal. Its debt joins the carried debt from his cancelled Faro deal, and his agent app shows the banner with the grace countdown (180 days from the first cancellation). Admin → Demo → *To the grace deadline of* Bruno, then Agents → **Write off**: junior absorbs the loss, senior investors are untouched, and "total written off" grows on `/invest`.
@@ -337,9 +339,10 @@ Reset the demo afterwards: fast-forwards move the clock for everyone.
 - **Testnet keys only.** Never reuse them. `.env*` files are gitignored except the template, and `keys:generate` creates `.env.local` with mode 600.
 - **Personal data.** It is encrypted with AES-256-GCM in Postgres, decrypted only for admins, and never on-chain. The registry shows addresses, never names.
 - **Trusted setup.** The trusted setup is a local single-contributor ceremony: fine for a testnet demo, but whoever ran `circuits/build.sh` could forge proofs if they kept the entropy. The verifier rejects non-canonical public inputs (≥ the field modulus), which would otherwise let one deal pass the nullifier check twice.
-- **ASA endpoint.** It verifies Standard Webhooks HMAC signatures once `LITHIC_ASA_HMAC_SECRET` is set; until then unsigned requests are accepted. Always set the secret alongside a Lithic key. Card tokens are unguessable and draws can only pay `card_settlement`, so the gap is a griefing risk, not a theft risk.
-- **Sessions and sign-in.** Sessions are iron-session cookies (httpOnly, SameSite=Lax, `Secure` in production). Email codes are HMAC-hashed, single use, limited to 5 attempts and rate-limited. State-changing routes accept only `application/json` (no cross-site form posts or login CSRF). API routes check the database-backed session on every call.
-- **Demo mode.** The demo admin and seed agents can sign in with codes shown on screen. The admin can move the protocol clock forward (interest, grace periods) because `demo_mode` was set at deploy, and Reset demo redeploys everything. Turn `DEMO_MODE` off outside demos.
+- **ASA endpoint.** It verifies Standard Webhooks HMAC signatures with `LITHIC_ASA_HMAC_SECRET`. During development, unsigned requests are accepted until the secret is set. In production a missing secret makes the endpoint refuse every request (503 `ASA_NOT_CONFIGURED`). Card tokens are unguessable and draws can only pay `card_settlement`.
+- **Sessions and sign-in.** Sessions are iron-session cookies (httpOnly, SameSite=Lax, `Secure` in production). Email codes are HMAC-hashed, single use, limited to 5 attempts and rate-limited. The admin role follows `ADMIN_EMAILS` on every sign-in, passkey included; a session started before a removal lasts until it expires (at most 7 days). State-changing routes accept only `application/json` (no cross-site form posts or login CSRF). API routes check the database-backed session on every call, and 500 responses hide internal details in production.
+- **Faucet.** The public tEURC faucet is rate-limited per address (once a minute), per IP (5 per 10 minutes) and per server instance (20 a minute). Every grant is an operator transaction queued behind card draws.
+- **Demo mode.** Seed agents sign in with codes shown on screen. The demo admin's code appears there only with the `DEMO_ADMIN_SIGNIN` opt-in. The admin can move the protocol clock forward (interest, grace periods) because `demo_mode` was set at deploy, and Reset demo redeploys everything. Turn `DEMO_MODE` off outside demos.
 - **Cron routes.** `/api/cron/sync` is public (idempotent, read-only towards the chain). `/api/cron/retry-draws` needs an admin session or `CRON_SECRET`.
 
 ## Testnet caveats

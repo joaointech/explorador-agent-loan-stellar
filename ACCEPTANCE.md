@@ -1,6 +1,6 @@
 # Acceptance checklist
 
-This is the spec §12.2 acceptance checklist, with the status and evidence for each item. It was written on 25 Oct 2026 against `feat/explorador-advance` at `341d3ff` ("merge: testnet deploy, seed, demo reset and e2e").
+This is the spec §12.2 acceptance checklist, with the status and evidence for each item. It was written on 25 Oct 2026 against `feat/explorador-advance` at `2cd9136`, which includes the testnet deploy, seed and e2e, the landing and registry pages, and the security-review fixes.
 
 Status legend:
 
@@ -13,7 +13,7 @@ Status legend:
 | 1 | A fresh clone builds with the README steps. | **Partly verified**: install, contract build, every test suite, typecheck, lint and `next build` pass on a clean checkout. The keys → deploy → seed path was not re-run for this document. |
 | 2 | Contracts deployed on testnet; ids in `deployments/testnet.json`. | **Verified** |
 | 3 | Admin can create a CPCV and see a note minted with a real on-chain Groth16 verification (tx link). | **Verified (automated) · browser QA pending** |
-| 4 | The registry shows the note with no personal data, and "Verify proof in your browser" succeeds. | **Verified (automated) for the API and the proof check · Pending**: the `/registry` pages are not merged into this branch yet |
+| 4 | The registry shows the note with no personal data, and "Verify proof in your browser" succeeds. | **Verified (automated) · browser QA pending** |
 | 5 | A new agent signs up with email + passkey, never sees a wallet, gets a card and activates it with one passkey prompt. | **Verified (automated) · browser QA pending** (real WebAuthn ceremony) |
 | 6 | A simulated Lithic purchase is approved via ASA and a `CardDraw` appears on-chain within ~10 s. | **Verified** on testnet with the in-app simulated card network (8.5 s); not run against a real Lithic sandbox key |
 | 7 | A purchase larger than spendable is declined with `INSUFFICIENT_FUNDS`. | **Verified** |
@@ -37,13 +37,13 @@ These were run on a clean checkout of this branch: no `apps/web/.env.local`, no 
 | `pnpm contracts:build` | OK; teurc 10,539 B, cpcv_note 23,268 B, advance_pool 56,555 B. **The wasm hashes equal the ones in `deployments/testnet.json`** (`761716af…`, `a52f94d1…`, `299d6e9f…`), so the deployed code is this source. |
 | `pnpm contracts:test` | 99 passed, 16 ignored (wasm-only) |
 | `cd contracts && cargo test --workspace -- --ignored` | 16 passed |
-| `pnpm --filter web test` | 63 files / 654 tests passed; database-backed files skipped |
-| same with `TEST_DATABASE_URL` (fresh database, `prisma db push`) | 70 files / 727 tests passed, 1 skipped (the opt-in testnet investor test) |
+| `pnpm --filter web test` | 73 files / 724 tests passed; database-backed files skipped |
+| same with `TEST_DATABASE_URL` (fresh database, `prisma db push`) | 80 files / 797 tests passed, 1 skipped (the opt-in testnet investor test) |
 | `pnpm circuits:test` | 21 passed |
 | `pnpm typecheck`, `pnpm lint` | clean |
-| `pnpm build` | OK without any env vars: every page and API route, plus the proxy |
+| `pnpm build` | OK without any env vars: every page (including `/registry` and `/registry/[id]`) and API route, plus the proxy |
 
-**Not re-run for this document:** `pnpm keys:generate` → `pnpm db:migrate` → `pnpm deploy:testnet` → `pnpm seed` → `pnpm dev` from a fresh clone. Those steps spend testnet XLM and create new contracts. The same scripts produced the live deployment (item 2) and the e2e run (appendix B). `keys:generate` was exercised offline against the completed `apps/web/.env.example`: every key and secret was generated, the placeholder admin was replaced by `admin@demo.explorador.pt`, and all 27 template keys parse identically with Node's `loadEnvFile` parser, `dotenv` and the repo's own `parseEnvFile`. **The orchestrator should still do one full clean-machine pass.**
+**Not re-run for this document:** `pnpm keys:generate` → `pnpm db:migrate` → `pnpm deploy:testnet` → `pnpm seed` → `pnpm dev` from a fresh clone. Those steps spend testnet XLM and create new contracts. The same scripts produced the live deployment (item 2) and the e2e run (appendix B). `keys:generate` was exercised offline against the completed `apps/web/.env.example`: every key and secret was generated, the placeholder admin was replaced by `admin@demo.explorador.pt`, and all 28 template keys parse identically with Node's `loadEnvFile` parser, `dotenv` and the repo's own `parseEnvFile`. **The orchestrator should still do one full clean-machine pass.**
 
 ## 2. Contracts deployed on testnet
 
@@ -79,9 +79,15 @@ Live reads at 17:50 UTC (RPC simulation, no keys): `cpcv_note.count()` = 5. `adv
 
 ## 4. Registry without personal data; "Verify proof in your browser"
 
+- **Pages.** `/registry` has status counts, a filter, search and "Load more". `/registry/[id]` shows the public fields, commitment, nullifier, proof points, the 9 public signals, the events timeline and what is hidden.
 - **Public API.** `GET /api/registry`, `GET /api/registry/[id]` and the SEP-50 metadata (`/api/registry/[id]/metadata`, alias `/api/notes/[id]`) select public columns only. Tests in `app/api/routes.test.ts`: "returns public fields, the stored snarkjs proof + signals, draws and a timeline — and no PII" and "returns SEP-50 metadata without personal data". Also `lib/indexer/read-models.test.ts`.
-- **Proof check.** The e2e checks "registry proof verifies with snarkjs" and "proof rebuilt from on-chain note data verifies (browser path)" both passed. The browser path is `lib/zk/verify.ts`, built only from browser-safe modules, plus `/zk/verification_key.json`.
-- **Pending.** The `/registry` and `/registry/[id]` pages, with the "Verify proof in your browser" button, come from the landing/registry workstream, which is not merged into this branch. Re-check after that merge, in a browser.
+- **"Verify proof in your browser" reads Stellar, not the API.** It simulates `cpcv_note.get(id)`, `attester_params()` and `verification_key()` on the Soroban RPC from the browser. It requires the registry's copy and the published verification key to equal the contract's, rebuilds the public signals and runs `snarkjs.groth16.verify` (DECISIONS.md, "Web: landing and registry pages").
+- **Tests.**
+  - `components/registry/proof-check.test.ts`: "verifies from Stellar alone when the registry has no signals or snarkjs proof", "fails when the registry's copy differs from the note on Stellar", "fails when the published verification key isn't the contract's", "rejects a proof made under another attester key, even with consistent bytes and signals".
+  - `components/registry/note-detail-view.test.tsx`: "offers in-browser verification", "lists what the proof hides".
+  - Also `registry-results.test.tsx`, `registry-query.test.ts` and `chain-note.test.ts`.
+  - On testnet, the e2e checks "registry proof verifies with snarkjs" and "proof rebuilt from on-chain note data verifies (browser path)".
+- **Browser QA pending:** open a seeded note on the live deployment, click the button and see the green check; confirm no name, NIF, price or address appears anywhere.
 
 ## 5. Agent onboarding: email + passkey, no wallet, card, one-prompt activation
 

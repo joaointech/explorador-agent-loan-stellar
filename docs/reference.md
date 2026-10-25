@@ -104,14 +104,14 @@ Errors are `{ "error": { "code", "message" } }`. State-changing routes accept on
 | `GET /api/registry/[id]` | Note detail: public fields, events timeline, proof in snarkjs format, public signals |
 | `GET /api/registry/[id]/metadata`, `GET /api/notes/[id]` | SEP-50 metadata (no personal data); `/api/notes/[id]` is what `token_uri` points at |
 | `GET /api/investor/[address]` | Shares, value, deposited, withdrawn, earned, history |
-| `POST /api/faucet/teurc` `{ address }` | 10,000 tEURC, operator-signed, once per address per minute (Freighter fallback) |
+| `POST /api/faucet/teurc` `{ address }` | 10,000 tEURC, operator-signed (Freighter fallback); once per address per minute, 5 per IP per 10 minutes, 20 per server instance per minute |
 | `GET /api/cron/sync` | One indexer pass (idempotent) |
 
 ### Auth
 
 | Route | Purpose |
 |---|---|
-| `POST /api/auth/email/start` `{ email }` | Sends a 6-digit code; returns `demoCode` for seeded demo accounts while `DEMO_MODE` is on |
+| `POST /api/auth/email/start` `{ email }` | Sends a 6-digit code. While `DEMO_MODE` is on, returns `demoCode` for seeded demo agents; for a seeded demo admin only with `DEMO_ADMIN_SIGNIN=true`, otherwise its code goes to the server console |
 | `POST /api/auth/email/verify` `{ email, code }` | Signs in (creates the user; role from `ADMIN_EMAILS`) |
 | `POST /api/auth/passkey/register/options`, `…/register/verify` | Passkey registration; for agents also provisions the smart account and card |
 | `POST /api/auth/passkey/provision` | Agent: retries a failed provisioning step (idempotent) |
@@ -146,4 +146,4 @@ Errors are `{ "error": { "code", "message" } }`. State-changing routes accept on
 
 | Route | Purpose |
 |---|---|
-| `POST /api/lithic/asa` | Lithic Auth Stream Access responder: Standard Webhooks signature check once `LITHIC_ASA_HMAC_SECRET` is set; idempotent on the Lithic transaction token |
+| `POST /api/lithic/asa` | Lithic Auth Stream Access responder: Standard Webhooks signature check with `LITHIC_ASA_HMAC_SECRET`; in production a missing secret means 503 `ASA_NOT_CONFIGURED`; idempotent on the Lithic transaction token |

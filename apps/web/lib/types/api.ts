@@ -239,6 +239,77 @@ export type AgentTxAction =
   | { action: "disable_card" }
   | { action: "withdraw_balance"; amount: Stroops; to?: string };
 
+// POST /api/stellar/agent-tx/prepare — body: AgentTxAction
+export interface AgentTxPrepareResponse {
+  action: AgentTxAction;
+  smartAccount: string;
+  /** "demo-ed25519" (seed agents): no passkey prompt, call /submit with the action only. */
+  signerKind: "passkey" | "demo-ed25519";
+  /** Unsigned auth entries (base64 XDR) with their expiration set; send them back unchanged to /submit. */
+  authEntries: string[];
+  /** One WebAuthn challenge (base64url of the smart-account auth digest) per auth entry. */
+  challenges: string[];
+  /** The passkey(s) allowed to sign (WebAuthn `allowCredentials`). */
+  allowCredentials: { id: string; transports?: string[] }[];
+  rpId: string;
+  /** Ledger after which the signatures expire (null for demo-signer agents). */
+  expirationLedger: number | null;
+}
+
+/** A WebAuthn assertion as returned by `@simplewebauthn/browser` `startAuthentication()`. */
+export interface WebAuthnAssertionJSON {
+  id: string;
+  rawId?: string;
+  type?: "public-key";
+  response: { authenticatorData: string; clientDataJSON: string; signature: string; userHandle?: string };
+  clientExtensionResults?: Record<string, unknown>;
+  authenticatorAttachment?: string;
+}
+
+// POST /api/stellar/agent-tx/submit — body: the same AgentTxAction fields plus the signed material
+export type AgentTxSubmitRequest = AgentTxAction & {
+  /** `authEntries` from /prepare, unchanged (omit for demo-signer agents). */
+  authEntries?: string[];
+  /** One assertion per auth entry, signing the matching challenge. */
+  assertions?: WebAuthnAssertionJSON[];
+};
+export interface AgentTxSubmitResponse extends TxResponse {
+  action: AgentTxAction["action"];
+  ledger: number;
+  /** On-chain card flag after enable_card / disable_card; null for withdraw_balance. */
+  cardEnabledOnChain: boolean | null;
+}
+
+// ---------- passkeys (spec §9.2) ----------
+// POST /api/auth/passkey/register/options → PublicKeyCredentialCreationOptionsJSON (@simplewebauthn)
+// POST /api/auth/passkey/login/options    → PublicKeyCredentialRequestOptionsJSON
+
+/** Smart account + card set-up of an agent (spec §4.2 steps 2–3). Retried by POST /api/auth/passkey/provision. */
+export interface AgentProvisioning {
+  status: "complete" | "failed";
+  smartAccount: string | null;
+  /** Null when the account already existed. */
+  deployTxHash: string | null;
+  cardLast4: string | null;
+  failedStep: "smart_account" | "card" | null;
+  error: string | null;
+}
+
+// POST /api/auth/passkey/register/verify — body: RegistrationResponseJSON
+export interface PasskeyRegisterVerifyResponse {
+  verified: true;
+  credentialId: string;
+  role: "AGENT" | "ADMIN";
+  /** Agents only (null for admins). */
+  provisioning: AgentProvisioning | null;
+}
+
+// POST /api/auth/passkey/login/verify — body: AuthenticationResponseJSON
+export interface PasskeyLoginVerifyResponse {
+  user: { email: string; role: "AGENT" | "ADMIN" };
+  redirectTo: "/agent" | "/admin";
+}
+
 // ---------- admin ----------
 
 // POST /api/admin/cpcv (admin): responds with a Server-Sent Events stream of PipelineEvent

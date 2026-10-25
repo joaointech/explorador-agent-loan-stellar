@@ -77,6 +77,46 @@ export function softwareAssertion(
   return { authenticatorData, clientDataJSON, signature };
 }
 
+/**
+ * A `navigator.credentials.create` response with "none" attestation, in the `@simplewebauthn/browser`
+ * RegistrationResponseJSON shape. `challenge` is the base64url string from the registration options.
+ */
+export function softwareRegistration(passkey: SoftwarePasskey, challenge: string, opts: { flags?: number } = {}) {
+  const credentialId = Buffer.from(passkey.credentialId, "base64url");
+  const idLength = Buffer.alloc(2);
+  idLength.writeUInt16BE(credentialId.length);
+  const authData = Buffer.concat([
+    sha256(Buffer.from(passkey.rpId)),
+    Buffer.from([opts.flags ?? 0x45]), // UP | UV | AT (attested credential data)
+    Buffer.alloc(4), // sign count
+    Buffer.alloc(16), // AAGUID
+    idLength,
+    credentialId,
+    Buffer.from(passkey.publicKeyCose),
+  ]);
+  const attestationObject = isoCBOR.encode(
+    new Map<string, string | Map<string, string> | Uint8Array>([
+      ["fmt", "none"],
+      ["attStmt", new Map<string, string>()],
+      ["authData", new Uint8Array(authData)],
+    ]),
+  );
+  const clientDataJSON = Buffer.from(
+    JSON.stringify({ type: "webauthn.create", challenge, origin: passkey.origin, crossOrigin: false }),
+  );
+  return {
+    id: passkey.credentialId,
+    rawId: passkey.credentialId,
+    type: "public-key" as const,
+    clientExtensionResults: {},
+    response: {
+      clientDataJSON: clientDataJSON.toString("base64url"),
+      attestationObject: Buffer.from(attestationObject).toString("base64url"),
+      transports: ["internal"],
+    },
+  };
+}
+
 /** The assertion in `@simplewebauthn/browser` AuthenticationResponseJSON shape. */
 export function assertionToJSON(passkey: SoftwarePasskey, assertion: SoftwareAssertion) {
   return {

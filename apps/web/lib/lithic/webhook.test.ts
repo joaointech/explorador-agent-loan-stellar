@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { HttpError } from "@/lib/http";
 
-import { computeAsaSignature, signAsaPayload, verifyAsaSignature } from "./webhook";
+import { assertAsaAuthentic, computeAsaSignature, signAsaPayload, verifyAsaSignature } from "./webhook";
 
 // Standard Webhooks reference vector; its signature is also the example
 // `webhook-signature` header in Lithic's ASA reference.
@@ -93,5 +93,31 @@ describe("ASA signature verification", () => {
   it("accepts a secret without the whsec_ prefix", () => {
     const bare = SECRET.slice("whsec_".length);
     expect(() => verifyAsaSignature(BODY, signAsaPayload(SECRET, BODY), bare)).not.toThrow();
+  });
+});
+
+describe("ASA authentication policy", () => {
+  it("verifies signatures whenever a secret is configured, in every environment", () => {
+    for (const nodeEnv of ["production", "development", "test"]) {
+      expect(() => assertAsaAuthentic(BODY, signAsaPayload(SECRET, BODY), SECRET, nodeEnv)).not.toThrow();
+      expectRejected(() => assertAsaAuthentic(BODY, {}, SECRET, nodeEnv), /Missing/);
+    }
+  });
+
+  it("refuses unsigned requests in production when no secret is configured (fails closed)", () => {
+    for (const secret of [undefined, ""]) {
+      try {
+        assertAsaAuthentic(BODY, {}, secret, "production");
+        throw new Error("expected the unsigned request to be refused");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HttpError);
+        expect(err).toMatchObject({ status: 503, code: "ASA_NOT_CONFIGURED" });
+      }
+    }
+  });
+
+  it("accepts unsigned requests without a secret outside production (tests, local tunnels)", () => {
+    expect(() => assertAsaAuthentic(BODY, {}, undefined, "development")).not.toThrow();
+    expect(() => assertAsaAuthentic(BODY, {}, undefined, "test")).not.toThrow();
   });
 });

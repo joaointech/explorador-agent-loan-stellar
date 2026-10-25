@@ -9,15 +9,15 @@ import { processAsaRequest } from "@/lib/card/asa";
 import { env } from "@/lib/env";
 import { route } from "@/lib/http";
 import { parseAsaRequest } from "@/lib/lithic/asa";
-import { verifyAsaSignature } from "@/lib/lithic/webhook";
+import { assertAsaAuthentic } from "@/lib/lithic/webhook";
 
 // Room for card_draw (submit + confirm on testnet) inside after().
 export const maxDuration = 60;
 
 export const POST = route(async (req: Request) => {
   const raw = await req.text();
-  const secret = env().LITHIC_ASA_HMAC_SECRET;
-  if (secret) verifyAsaSignature(raw, req.headers, secret);
+  // Signed requests only once a secret is configured; unsigned ones never in production.
+  assertAsaAuthentic(raw, req.headers, env().LITHIC_ASA_HMAC_SECRET);
 
   const outcome = await processAsaRequest(parseAsaRequest(raw));
   if (outcome.followUp) after(outcome.followUp);

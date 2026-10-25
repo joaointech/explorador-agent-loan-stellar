@@ -11,6 +11,9 @@ import { invokeContractFunc } from "./agent-tx-sponsor";
 const I128_MAX = (1n << 127n) - 1n;
 
 const isAccountOrContract = (s: string) => StrKey.isValidEd25519PublicKey(s) || StrKey.isValidContract(s);
+const STROOPS = /^[0-9]{1,39}$/;
+// zod runs refinements even after the regex fails, so re-check before BigInt().
+const isPositiveI128 = (v: string) => STROOPS.test(v) && BigInt(v) > 0n && BigInt(v) <= I128_MAX;
 
 /** Request-body schema for `AgentTxAction` (amount = decimal string of stroops). */
 export const agentTxActionSchema: z.ZodType<AgentTxAction> = z.discriminatedUnion("action", [
@@ -20,8 +23,8 @@ export const agentTxActionSchema: z.ZodType<AgentTxAction> = z.discriminatedUnio
     action: z.literal("withdraw_balance"),
     amount: z
       .string()
-      .regex(/^[0-9]{1,39}$/, "amount must be a decimal string of stroops")
-      .refine((v) => BigInt(v) > 0n && BigInt(v) <= I128_MAX, "amount must be positive"),
+      .regex(STROOPS, "amount must be a decimal string of stroops")
+      .refine(isPositiveI128, "amount must be a positive i128"),
     to: z.string().refine(isAccountOrContract, "to must be a G… account or C… contract address").optional(),
   }),
 ]);

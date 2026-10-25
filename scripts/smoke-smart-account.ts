@@ -18,8 +18,10 @@ process.loadEnvFile(path.resolve(import.meta.dirname, "../apps/web/.env.local"))
 const sa = await import("@/lib/stellar/smart-account");
 const sponsorLib = await import("@/lib/stellar/agent-tx-sponsor");
 const auth = await import("@/lib/stellar/agent-tx-auth");
+const agentTx = await import("@/lib/stellar/agent-tx");
 const { derToCompactLowS } = await import("@/lib/passkey/signature");
-const { createSoftwarePasskey, softwareAssertion } = await import("@/lib/passkey/software-authenticator");
+const { webauthnConfig } = await import("@/lib/passkey/config");
+const { assertionToJSON, createSoftwarePasskey, softwareAssertion } = await import("@/lib/passkey/software-authenticator");
 const { explorerUrl } = await import("@/lib/stellar/contracts");
 
 const XLM = 10_000_000n;
@@ -59,8 +61,9 @@ async function main() {
   if (again.address !== demo.address || again.txHash !== null) throw new Error("deployDemoSmartAccount is not idempotent");
   log("redeploy is a no-op (idempotent) ✓");
 
-  // 2. Passkey account (P-256 key generated in Node)
-  const passkey = createSoftwarePasskey({ rpId: "localhost", origin: "http://localhost:3106" });
+  // 2. Passkey account (P-256 key generated in Node, for this app's RP ID and origin)
+  const { rpID, origin } = webauthnConfig();
+  const passkey = createSoftwarePasskey({ rpId: rpID, origin });
   const pk = await sa.deployPasskeySmartAccount({ credentialId: passkey.credentialId, publicKeyP256: passkey.publicKeyP256 });
   log(`passkey account ${pk.address}`);
   txLine("deploy (passkey)", pk.txHash);
@@ -107,8 +110,20 @@ async function main() {
   if (pkBefore - pkAfter !== XLM) throw new Error(`passkey balance moved by ${pkBefore - pkAfter}`);
   log(`passkey account balance ${pkBefore} → ${pkAfter} stroops ✓`);
 
+  // 5b. The same passkey through the exact /prepare → browser → /submit code path of the agent-tx routes
+  const splitFunc = transferFunc(pk.address, sponsor.publicKey(), 1n * XLM);
+  const recorded = await sponsorLib.recordAuth(splitFunc);
+  const prepared = agentTx.preparePasskeyEntries(recorded.auth, recorded.latestLedger); // /prepare response
+  const browser = assertionToJSON(passkey, softwareAssertion(passkey, Buffer.from(prepared.challenges[0]!, "base64url"))); // startAuthentication()
+  const signedEntries = prepared.authEntries.map((e) => agentTx.signEntryWithAssertion(agentTx.decodeAuthEntry(e), passkey, browser)); // /submit
+  const splitTx = await sponsorLib.submitSponsored(splitFunc, signedEntries);
+  txLine("transfer 1 XLM via prepare → passkey → submit", splitTx.txHash);
+  const pkAfterSplit = await balance(pk.address);
+  if (pkAfter - pkAfterSplit !== XLM) throw new Error(`passkey balance moved by ${pkAfter - pkAfterSplit}`);
+  log(`passkey account balance ${pkAfter} → ${pkAfterSplit} stroops ✓`);
+
   // 6. A signature from a different P-256 key must be rejected
-  const impostor = createSoftwarePasskey({ rpId: "localhost", origin: "http://localhost:3106" });
+  const impostor = createSoftwarePasskey({ rpId: rpID, origin });
   try {
     await sa.invokeAsSmartAccount({
       smartAccount: pk.address,

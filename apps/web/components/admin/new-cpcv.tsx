@@ -53,6 +53,20 @@ const EMPTY: FormState = {
   escrituraDate: null,
 };
 
+/** Form input → the API field its errors are reported on. */
+const FIELD_OF: Record<keyof FormState, CpcvField> = {
+  agentId: "agentId",
+  buyerName: "buyerName",
+  buyerNif: "buyerNif",
+  sellerName: "sellerName",
+  sellerNif: "sellerNif",
+  propertyAddress: "propertyAddress",
+  salePrice: "salePriceCents",
+  ratePct: "commissionRateBps",
+  cpcvDate: "cpcvDate",
+  escrituraDate: "escrituraDate",
+};
+
 type Phase = "form" | "running" | "done" | "failed";
 
 interface Outcome {
@@ -133,7 +147,8 @@ export function NewCpcvPanel() {
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
-    if (errors[key as CpcvField]) setErrors((e) => ({ ...e, [key]: undefined }));
+    const field = FIELD_OF[key];
+    if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
   };
 
   const candidate = (): unknown => ({
@@ -252,7 +267,17 @@ export function NewCpcvPanel() {
           >
             <fieldset disabled={running} className="grid gap-5 sm:grid-cols-2">
               <legend className="sr-only">CPCV details</legend>
-              <Field label="Agent" required error={errors.agentId} className="sm:col-span-2" hint="The note is minted to this agent's smart account.">
+              <Field
+                label="Agent"
+                required
+                error={errors.agentId}
+                className="sm:col-span-2"
+                hint={
+                  !agents.loading && readyAgents.length === 0
+                    ? "No agent has a smart account yet: they appear here once they finish onboarding."
+                    : "The note is minted to this agent's smart account."
+                }
+              >
                 {agents.loading ? (
                   <Skeleton className="h-11 w-full rounded-xl" />
                 ) : (

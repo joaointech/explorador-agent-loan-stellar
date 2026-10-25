@@ -61,12 +61,20 @@ export function PipelineSteps({ state, meta = {} }: { state: PipelineState; meta
   const steps: Step[] = PIPELINE.map((s) => {
     const st = state[s.id];
     const duration = st.status === "done" && st.startedAt !== undefined && st.endedAt !== undefined && s.id !== "done" ? seconds(st.endedAt - st.startedAt) : undefined;
+    const extra = meta[s.id];
     return {
       id: s.id,
       label: s.label,
       status: st.status,
       description: st.status === "idle" ? s.description : (st.message ?? s.description),
-      meta: meta[s.id] ?? duration,
+      meta: extra ? (
+        <span className="inline-flex items-center gap-1.5">
+          {duration && <span>{duration} ·</span>}
+          {extra}
+        </span>
+      ) : (
+        duration
+      ),
     };
   });
   return <Stepper steps={steps} label="CPCV pipeline" />;

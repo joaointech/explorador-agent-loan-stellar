@@ -11,9 +11,12 @@
 //   D120 end: A1 ~70% used (escritura +55 d), B2 lightly used (+75 d),
 //        C3 + A5 settled, B4 cancelled in grace (deadline D270)
 //
-// Steps that don't depend on each other run in parallel lanes: each agent's
-// operator-authorized calls are paid by its own channel account, enable_card
-// goes through the sponsor, investors sign their own deposits.
+// CPCVs are created with the admin's New CPCV pipeline (lib/admin/pipeline.ts),
+// so seeded rows are identical to UI-created ones. Steps that don't depend on
+// each other run in parallel lanes: each agent's card draws, settlements and
+// cancellations are paid by its own channel account (the operator signs its
+// auth entry), mints by the operator, enable_card by the sponsor, deposits by
+// the investors themselves.
 
 import { provisionDemoAgent } from "@/lib/agent/provision";
 import { refreshCachedPosition } from "@/lib/card/position";
@@ -110,7 +113,8 @@ export async function runSeed(opts: { log: Log }): Promise<SeedSummary> {
   const before: Record<string, bigint> = {};
   await all(
     Object.entries(payers).map(async ([role, address]) => {
-      before[role] = await ensureXlm(address, role === "operator" ? 1_500 : 2_000, (m) => log(`${role}: ${m}`));
+      // The operator pays the five mints (~1,000-1,500 XLM each); the channels pay draws, settles, cancels.
+      before[role] = await ensureXlm(address, role === "operator" ? 7_000 : 2_000, (m) => log(`${role}: ${m}`));
     }),
   );
 
@@ -131,15 +135,16 @@ export async function runSeed(opts: { log: Log }): Promise<SeedSummary> {
   const notes = {} as SeedSummary["notes"];
   let spendCount = 0;
 
-  // Mints never run concurrently: the note's storage keys depend on cpcv_note's next id, so two
-  // mints simulated against the same state would collide (the second fails its footprint).
+  // CPCVs go through the admin's New CPCV pipeline (operator-signed mint, like the UI). Mints never
+  // run concurrently: the note's storage keys depend on cpcv_note's next id, so two mints simulated
+  // against the same state would collide (the second fails its footprint).
   const mint = (key: DealKey) =>
     inProcessMutex("demo-seed:mint", async () => {
       const s = SEED_DEALS[key];
       const agent = agents[s.agent];
       // A mint costs ~1,000-1,500 XLM on today's testnet (new persistent entries with 90-day TTLs).
-      await ensureXlm(lanes[s.agent].publicKey(), 3_000, (m) => log(`channel ${s.agent}: ${m}`));
-      const res = await createCpcvNote(agent, { ...s.deal, cpcvDay: d0 + s.cpcvOn, escrituraDay: d0 + s.escrituraOn }, { source: lanes[s.agent] });
+      await ensureXlm(operator.publicKey(), 2_500, (m) => log(`operator: ${m}`));
+      const res = await createCpcvNote(agent.userId, { ...s.deal, cpcvDay: d0 + s.cpcvOn, escrituraDay: d0 + s.escrituraOn });
       notes[key] = { noteId: res.noteId, mintTx: res.txHash };
       log(`${key} minted: note #${res.noteId} for ${agent.displayName} (${s.deal.propertyAddress.split(", ").pop()}), escritura D${s.escrituraOn} (tx ${short(res.txHash)})`);
       return res;

@@ -12,6 +12,16 @@ import { ENV_FILE, REPO_ROOT, logger } from "./env";
 
 const DEFAULT_E2E_DB = "postgresql://advance:advance@localhost:5433/advance_e2e";
 const e2eUrl = process.env.E2E_DATABASE_URL ?? DEFAULT_E2E_DB;
+// The e2e wipes its database first: never let it point at the app's (demo) database.
+{
+  const { existsSync, readFileSync } = await import("node:fs");
+  const { parseEnvFile } = await import("@/lib/demo/env-file");
+  const appDb = existsSync(ENV_FILE) ? parseEnvFile(readFileSync(ENV_FILE, "utf8")).get("DATABASE_URL") : undefined;
+  if (appDb && new URL(appDb).pathname === new URL(e2eUrl).pathname && new URL(appDb).host === new URL(e2eUrl).host) {
+    console.error(`[e2e] E2E_DATABASE_URL points at the app database (${new URL(appDb).pathname.slice(1)}); use a separate one`);
+    process.exit(1);
+  }
+}
 // Set before the env file loads (loadEnvFile never overrides existing variables).
 process.env.DATABASE_URL = e2eUrl;
 try {

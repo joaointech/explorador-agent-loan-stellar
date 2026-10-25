@@ -1,7 +1,8 @@
 // End-to-end flow on testnet (spec §12.1), run by `pnpm e2e` against its own
 // database: fresh deploy → investor deposit → demo-signer agent → enable card →
-// CPCV + real on-chain Groth16 mint → card purchase through the simulated card
-// network's ASA pipeline → +90 days → settle (worked example §5.6: interest
+// CPCV through the admin's New CPCV pipeline + real on-chain Groth16 mint →
+// card purchase through the simulated card network's ASA pipeline → +90 days →
+// settle (worked example §5.6: interest
 // €88.77, payout €4,411.23, junior +€7,500, share price up) → second CPCV →
 // purchase from balance + credit → cancel → write-off refused before the grace
 // deadline → +181 days → write off (junior absorbs the loss, senior untouched).
@@ -42,6 +43,7 @@ import { deployContracts, recordDeployment, storedWasmHashes, type DeployResult 
 import { demoInvestorKeypair } from "./keys-derived";
 import { eur, fastForward, fmtEur, investorDeposit, protocolToday } from "./ops";
 import { nif } from "./seed-data";
+import { wipeDemoData } from "./wipe";
 
 export class E2eAssertionError extends Error {}
 
@@ -85,6 +87,9 @@ export async function runE2e(opts: { log: Log }): Promise<E2eSummary> {
   }
 
   // ---- 1. fresh deploy (from the uploaded wasm) as this database's active deployment
+  // This database is the e2e's own: rows of earlier runs belong to dead contracts (and the same deal
+  // data would trip the admin pipeline's "already financed" nullifier guard), so start clean.
+  await wipeDemoData(log);
   log("1. deploying fresh contracts from the stored wasm hashes");
   const deployment = await deployContracts({ wasmHashes: await storedWasmHashes(), log, demoMode: true });
   await recordDeployment(deployment);
@@ -144,7 +149,7 @@ export async function runE2e(opts: { log: Log }): Promise<E2eSummary> {
     cpcvDay: today - 2,
     escrituraDay: today + 90,
   };
-  const m1 = await createCpcvNote(agent, deal1);
+  const m1 = await createCpcvNote(agent.userId, deal1);
   txs["mint note 1 (on-chain Groth16)"] = m1.txHash;
   const note1 = await readNote(m1.noteId);
   check(note1.totalCommission === eur(15_000) && note1.agentCommission === eur(7_500), "note #1 stores total €15,000 / agent €7,500", `note #${m1.noteId}`);
@@ -209,7 +214,7 @@ export async function runE2e(opts: { log: Log }): Promise<E2eSummary> {
   log("8. CPCV #2 → purchase → cancel → grace → write-off");
   today = await protocolToday();
   const m2 = await createCpcvNote(
-    agent,
+    agent.userId,
     {
       buyerName: "Tiago Moreira Pinto",
       buyerNif: nif("27654321"),

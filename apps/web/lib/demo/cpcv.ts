@@ -1,21 +1,13 @@
-// The CPCV → proof → note pipeline (spec §4.3) for the seed and e2e: the real
-// thing, end to end — encrypted PII (including the commitment salt) in
-// Postgres, attestation signature + Groth16 proof (snarkjs) verified locally,
-// `cpcv_note.mint` verified on-chain, and the Cpcv row moved to MINTED with
-// the note id and tx hash. `Cpcv.proof` = `{ proof, publicSignals }`.
-//
-// PII format: version 1 of the admin workstream's `Cpcv.piiEncrypted` record
-// (lib/admin/pii.ts on its branch), so the admin panel decrypts seeded rows:
-//   { v: 1, buyerName, buyerNif, sellerName, sellerNif, propertyAddress,
-//     salePriceCents: number, commissionRateBps: number,
-//     cpcvDate: "YYYY-MM-DD", cpcvDay: number, salt: "<64 hex>" | null }
+// Seed / e2e CPCVs go through the admin's own CPCV → proof → note pipeline
+// (lib/admin/pipeline.ts, behind POST /api/admin/cpcv), so they are exactly
+// what the "New CPCV" form produces: the same form validation, PII encrypted
+// with `encryptCpcvPii` (v1, including the commitment salt), the proof stored
+// as `{ proof, publicSignals }`, the nullifier "already financed" guard, and the
+// row moved PROVING → MINTED with `noteId` + `mintTxHash` (or FAILED).
 
-import { encryptJson } from "@/lib/crypto";
-import { db } from "@/lib/db";
-import { mintNote, type TxSourceOptions } from "@/lib/stellar/contracts";
-import { DAY_SECS } from "@/lib/units";
-import { toHex } from "@/lib/zk/field";
-import { proveCpcvWithKeys, zkKeysFromEnv, type CpcvProof, type ProveStep, type ZkKeys } from "@/lib/zk/prove";
+import { adminCpcvInputSchema, dayToIsoDate } from "@/lib/admin/cpcv-input";
+import { runCpcvPipeline } from "@/lib/admin/pipeline";
+import type { AdminCpcvInput, PipelineEvent } from "@/lib/types/api";
 
 export interface DealInput {
   buyerName: string;
@@ -25,29 +17,21 @@ export interface DealInput {
   propertyAddress: string;
   salePriceCents: bigint;
   commissionRateBps: number;
+  /** Days since the Unix epoch (UTC). */
   cpcvDay: number;
   escrituraDay: number;
 }
 
-export interface CpcvPiiV1 {
-  v: 1;
-  buyerName: string;
-  buyerNif: string;
-  sellerName: string;
-  sellerNif: string;
-  propertyAddress: string;
-  salePriceCents: number;
-  commissionRateBps: number;
-  cpcvDate: string;
-  cpcvDay: number;
-  salt: string | null;
+export interface MintedCpcv {
+  cpcvId: string;
+  noteId: number;
+  txHash: string;
 }
 
-export const dayToIsoDate = (day: number): string => new Date(day * DAY_SECS * 1000).toISOString().slice(0, 10);
-
-export function piiRecord(deal: DealInput, salt: string | null): CpcvPiiV1 {
-  return {
-    v: 1,
+/** The New CPCV form body for a deal (validated with the form's schema). */
+export function adminCpcvInput(agentUserId: string, deal: DealInput): AdminCpcvInput {
+  return adminCpcvInputSchema.parse({
+    agentId: agentUserId,
     buyerName: deal.buyerName,
     buyerNif: deal.buyerNif,
     sellerName: deal.sellerName,
@@ -56,69 +40,19 @@ export function piiRecord(deal: DealInput, salt: string | null): CpcvPiiV1 {
     salePriceCents: Number(deal.salePriceCents),
     commissionRateBps: deal.commissionRateBps,
     cpcvDate: dayToIsoDate(deal.cpcvDay),
-    cpcvDay: deal.cpcvDay,
-    salt,
-  };
-}
-
-export interface MintedCpcv {
-  cpcvId: string;
-  noteId: number;
-  txHash: string;
-  proof: CpcvProof;
-}
-
-export interface CreateCpcvOptions extends TxSourceOptions {
-  keys?: ZkKeys;
-  onStep?: (step: ProveStep | "minting") => void;
-}
-
-/** Proves the deal for `agent.smartAccount`, stores the encrypted record and mints the note. */
-export async function createCpcvNote(agent: { userId: string; smartAccount: string }, deal: DealInput, opts: CreateCpcvOptions = {}): Promise<MintedCpcv> {
-  const proof = await proveCpcvWithKeys(
-    agent.smartAccount,
-    {
-      buyerNif: deal.buyerNif,
-      sellerNif: deal.sellerNif,
-      salePriceCents: deal.salePriceCents,
-      commissionRateBps: deal.commissionRateBps,
-      propertyAddress: deal.propertyAddress,
-      cpcvDay: deal.cpcvDay,
-      escrituraDay: deal.escrituraDay,
-    },
-    opts.keys ?? zkKeysFromEnv(),
-    opts.onStep,
-  );
-  const row = await db.cpcv.create({
-    data: {
-      agentId: agent.userId,
-      piiEncrypted: encryptJson(piiRecord(deal, proof.salt)),
-      totalCommissionCents: proof.totalCommissionCents,
-      agentCommissionCents: proof.agentCommissionCents,
-      escrituraDay: deal.escrituraDay,
-      commitment: toHex(proof.commitment),
-      nullifier: toHex(proof.nullifier),
-      proof: { proof: proof.snarkjsProof, publicSignals: proof.publicSignals } as object,
-      status: "PROVING",
-    },
+    escrituraDate: dayToIsoDate(deal.escrituraDay),
   });
-  opts.onStep?.("minting");
-  try {
-    const res = await mintNote(
-      {
-        to: agent.smartAccount,
-        proof: proof.sorobanProof,
-        totalCommissionCents: proof.totalCommissionCents,
-        escrituraDay: deal.escrituraDay,
-        commitment: proof.commitment,
-        nullifier: proof.nullifier,
-      },
-      { source: opts.source },
-    );
-    await db.cpcv.update({ where: { id: row.id }, data: { status: "MINTED", noteId: res.result, mintTxHash: res.txHash, error: null } });
-    return { cpcvId: row.id, noteId: res.result, txHash: res.txHash, proof };
-  } catch (err) {
-    await db.cpcv.update({ where: { id: row.id }, data: { status: "FAILED", error: err instanceof Error ? err.message.slice(0, 500) : String(err) } });
-    throw err;
+}
+
+/** Runs the admin pipeline for `deal` (operator-signed mint); throws with the failed step's message. */
+export async function createCpcvNote(agentUserId: string, deal: DealInput, opts: { onEvent?: (event: PipelineEvent) => void } = {}): Promise<MintedCpcv> {
+  let failure: PipelineEvent | undefined;
+  const res = await runCpcvPipeline(adminCpcvInput(agentUserId, deal), (event) => {
+    if (event.status === "failed") failure = event;
+    opts.onEvent?.(event);
+  });
+  if (!res.ok || res.cpcvId === null || res.noteId === null || res.txHash === null) {
+    throw new Error(`CPCV pipeline failed at "${failure?.step ?? "unknown"}": ${failure?.message ?? "no details"}`);
   }
+  return { cpcvId: res.cpcvId, noteId: res.noteId, txHash: res.txHash };
 }

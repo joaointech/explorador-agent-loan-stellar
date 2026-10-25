@@ -10,13 +10,14 @@ import {
   Keypair,
   Operation,
   StrKey,
+  Transaction,
   TransactionBuilder,
   hash,
   nativeToScVal,
   rpc,
   scValToNative,
   xdr,
-  type Transaction,
+  type FeeBumpTransaction,
 } from "@stellar/stellar-sdk";
 
 import { env, requireEnv } from "@/lib/env";
@@ -25,6 +26,9 @@ import { HttpError } from "@/lib/http";
 const INCLUSION_FEE = "1000"; // stroops; resource fees are added from simulation
 const TX_TIMEOUT_SECS = 90;
 const POLL_ATTEMPTS = 40; // ~1 s apart: ledgers close every ~5 s
+const UINT32_MAX = 0xffffffffn;
+/** Resource fee the SDK builder accepts; replaced by the simulated one on the fee-bump path. */
+const PLACEHOLDER_RESOURCE_FEE = 1_000_000n;
 
 /** Chain-side failure surfaced to API callers as `{ error: { code, message } }`. */
 export class ChainTxError extends HttpError {
@@ -150,7 +154,7 @@ export function errorFromDiagnostics(events: xdr.DiagnosticEvent[] | undefined):
       if (topic.type !== "scvError") continue;
       const err = topic.error;
       if (err.type === "sceContract") return `Error(Contract, #${err.contractCode})`;
-      return `Error(${err.type.replace(/^sce/, "")}, ${err.code.name})`;
+      return `Error(${err.type.replace(/^sce/, "")}, ${err.code.name.replace(/^scec/, "")})`;
     }
   }
   return null;
@@ -224,7 +228,58 @@ export async function contractExists(contractId: string): Promise<boolean> {
   return res.entries.length > 0;
 }
 
-async function sendAndPoll(tx: Transaction, opts: { advanceCodes?: boolean }) {
+/**
+ * Builds the sponsor-sourced transaction for `op` with the simulated Soroban data and signs it as
+ * sponsor. When the resource fee doesn't fit the uint32 transaction fee (~429 XLM; restoring archived
+ * contract code costs more on today's testnet), the transaction is wrapped in a fee bump, whose
+ * int64 fee pays for it: the inner transaction is built with a placeholder resource fee (the SDK
+ * builder caps the total at uint32) and the simulated data is swapped in before signing.
+ */
+export function sponsorEnvelope(source: Account, op: xdr.Operation, data: xdr.SorobanTransactionData): Transaction | FeeBumpTransaction {
+  const sponsor = sponsorKeypair();
+  const passphrase = networkPassphrase();
+  const fits = data.resourceFee + BigInt(INCLUSION_FEE) <= UINT32_MAX;
+  const built = new TransactionBuilder(source, { fee: INCLUSION_FEE, networkPassphrase: passphrase })
+    .setSorobanData(
+      fits ? data : new xdr.SorobanTransactionData({ ext: data.ext, resources: data.resources, resourceFee: PLACEHOLDER_RESOURCE_FEE }),
+    )
+    .addOperation(op)
+    .setTimeout(TX_TIMEOUT_SECS)
+    .build();
+  if (fits) {
+    built.sign(sponsor);
+    return built;
+  }
+  const envelope = built.toEnvelope();
+  if (envelope.type !== "envelopeTypeTx") throw new Error("Unexpected transaction envelope type");
+  const t = envelope.v1.tx;
+  const inner = new Transaction(
+    xdr.TransactionEnvelope.envelopeTypeTx(
+      new xdr.TransactionV1Envelope({
+        tx: new xdr.Transaction({
+          sourceAccount: t.sourceAccount,
+          fee: t.fee,
+          seqNum: t.seqNum,
+          cond: t.cond,
+          memo: t.memo,
+          operations: t.operations,
+          ext: xdr.TransactionExt.sorobanData(data),
+        }),
+        signatures: [],
+      }),
+    ),
+    passphrase,
+  );
+  inner.sign(sponsor);
+  const bump = TransactionBuilder.buildFeeBumpTransaction(sponsor, INCLUSION_FEE, inner, passphrase);
+  bump.sign(sponsor);
+  return bump;
+}
+
+/** The source account as it was before `tx` consumed a sequence number (to rebuild the same transaction). */
+const sourceOf = (tx: Transaction) => new Account(tx.source, (BigInt(tx.sequence) - 1n).toString());
+
+async function sendAndPoll(tx: Transaction | FeeBumpTransaction, opts: { advanceCodes?: boolean }) {
   const server = stellarRpc();
   const sent = await server.sendTransaction(tx);
   if (sent.status === "ERROR") {
@@ -246,12 +301,7 @@ async function sendAndPoll(tx: Transaction, opts: { advanceCodes?: boolean }) {
 
 /** Restores archived ledger entries reported by a simulation (sponsor pays). */
 async function restoreFootprint(source: Account, restore: rpc.Api.SimulateTransactionRestoreResponse["restorePreamble"]) {
-  const tx = new TransactionBuilder(source, { fee: String(Number(INCLUSION_FEE) + Number(restore.minResourceFee)), networkPassphrase: networkPassphrase() })
-    .setSorobanData(restore.transactionData.build())
-    .addOperation(Operation.restoreFootprint({}))
-    .setTimeout(TX_TIMEOUT_SECS)
-    .build();
-  tx.sign(sponsorKeypair());
+  const tx = sponsorEnvelope(source, Operation.restoreFootprint({}), restore.transactionData.build());
   const res = await sendAndPoll(tx, {});
   if (res.kind !== "success") throw new ChainTxError("RESTORE_FAILED", `Could not restore archived contract state (${res.kind})`);
 }
@@ -311,8 +361,10 @@ export async function submitSponsored(
         continue;
       }
       assertSponsorOnlyPaysFees(sim, signedAuth.length > 0);
-      const prepared = rpc.assembleTransaction(tx, sim).build();
-      prepared.sign(sponsor);
+      // Same as rpc.assembleTransaction (simulated footprint, resources and fee; recorded auth when
+      // the caller sent none), plus the fee-bump fallback for resource fees above uint32.
+      const auth = signedAuth.length > 0 ? signedAuth : (sim.result?.auth ?? []);
+      const prepared = sponsorEnvelope(sourceOf(tx), Operation.invokeHostFunction({ func, auth }), sim.transactionData.build());
       const res = await sendAndPoll(prepared, opts);
       if (res.kind === "success") return { txHash: res.hash, ledger: res.ledger, returnValue: res.returnValue };
       if (res.kind === "busy" || res.code === "txBadSeq") {

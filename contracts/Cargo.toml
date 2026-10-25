@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["shared", "teurc", "cpcv_note", "advance_pool"]
+members = ["shared", "teurc", "cpcv_note", "advance_pool", "integration_tests"]
 
 [workspace.package]
 version = "0.1.0"

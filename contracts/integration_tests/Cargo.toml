@@ -1,0 +1,19 @@
+[package]
+name = "integration_tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "End-to-end tests of teurc, cpcv_note and advance_pool deployed together (test-only crate)"
+
+# Test-only: the library is empty outside `cargo test` (`#![cfg(test)]`), and
+# it is not a cdylib, so `stellar contract build` skips it.
+[lib]
+doctest = false
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+advance-shared = { workspace = true }
+teurc = { path = "../teurc" }
+cpcv_note = { path = "../cpcv_note" }
+advance_pool = { path = "../advance_pool" }

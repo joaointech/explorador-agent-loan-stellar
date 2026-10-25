@@ -1,8 +1,9 @@
 // The CPCV → proof → note pipeline behind POST /api/admin/cpcv (spec §4.3,
 // §8.6), reported step by step for the admin's Stepper:
 //
-//   validating  form + agent + protocol date; the Cpcv row is created (PROVING)
-//               with the PII encrypted
+//   validating  form + agent + protocol date (+ the signed PDF, if attached);
+//               the Cpcv row is created (PROVING) with the PII encrypted, and
+//               the PDF linked to it in the same transaction
 //   signing     explorador's attester key signs the deal record   ┐ proveCpcv
 //   proving     Groth16 proof with snarkjs                         │ (lib/zk)
 //   verifying   local verification; commitment, nullifier, proof   ┘
@@ -26,6 +27,7 @@ import { proveCpcv, type CpcvPrivateInput } from "@/lib/zk/prove";
 
 import { chainHttpError, shortMessage } from "./chain-errors";
 import { previewCommission, type CommissionPreview } from "./commission";
+import { checkLinkableDocument, linkCpcvDocument } from "./cpcv-documents";
 import { isoDateToDay, protocolDateIssues } from "./cpcv-input";
 import { encryptCpcvPii, type CpcvPii } from "./pii";
 
@@ -42,6 +44,8 @@ interface ValidatedCpcv {
   commission: CommissionPreview;
   pii: CpcvPii;
   escrituraDay: number;
+  /** The signed PDF to link, and the CPCV it is linked to now (null, or a FAILED one). */
+  document: { id: string; previousCpcvId: string | null } | null;
 }
 
 /** Statuses that mean a deal was financed; a FAILED or abandoned PROVING row doesn't block a retry. */
@@ -102,11 +106,14 @@ async function validate(input: AdminCpcvInput): Promise<ValidatedCpcv> {
     throw err;
   }
 
+  const document = input.documentId ? { id: input.documentId, ...(await checkLinkableDocument(input.documentId)) } : null;
+
   return {
     agent: { userId: user.id, email: user.email, smartAccount: user.agent.smartAccount },
     privateInput,
     commission: previewCommission(input.salePriceCents, input.commissionRateBps),
     escrituraDay,
+    document,
     pii: {
       v: 1,
       buyerName: input.buyerName,
@@ -137,22 +144,28 @@ export async function runCpcvPipeline(input: AdminCpcvInput, emit: (event: Pipel
   try {
     start("validating", "Checking the CPCV, the agent and the protocol date");
     const cpcv = await validate(input);
-    const row = await db.cpcv.create({
-      data: {
-        agentId: cpcv.agent.userId,
-        piiEncrypted: encryptCpcvPii(cpcv.pii),
-        totalCommissionCents: cpcv.commission.totalCents,
-        agentCommissionCents: cpcv.commission.agentCents,
-        escrituraDay: cpcv.escrituraDay,
-        // Known once the proof exists (the salt is random per proof).
-        commitment: "",
-        nullifier: "",
-        status: "PROVING",
-      },
-      select: { id: true },
-    });
+    const data = {
+      agentId: cpcv.agent.userId,
+      piiEncrypted: encryptCpcvPii(cpcv.pii),
+      totalCommissionCents: cpcv.commission.totalCents,
+      agentCommissionCents: cpcv.commission.agentCents,
+      escrituraDay: cpcv.escrituraDay,
+      // Known once the proof exists (the salt is random per proof).
+      commitment: "",
+      nullifier: "",
+      status: "PROVING" as const,
+    };
+    const { document } = cpcv;
+    const row = document
+      ? // The row and its signed PDF together: if another CPCV took the PDF meanwhile, neither is written.
+        await db.$transaction(async (tx) => {
+          const created = await tx.cpcv.create({ data, select: { id: true } });
+          await linkCpcvDocument(tx, document.id, document.previousCpcvId, created.id);
+          return created;
+        })
+      : await db.cpcv.create({ data, select: { id: true } });
     cpcvId = row.id;
-    complete("validating", `CPCV for ${cpcv.agent.email} recorded (personal data encrypted)`, {
+    complete("validating", `CPCV for ${cpcv.agent.email} recorded (personal data encrypted${document ? ", signed PDF attached" : ""})`, {
       cpcvId,
       totalCommission: cpcv.commission.total.toString(),
       agentCommission: cpcv.commission.agent.toString(),

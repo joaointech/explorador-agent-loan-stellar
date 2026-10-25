@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleCheck, CircleX, FileText, RotateCcw, ShieldCheck, WandSparkles } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { TxLink } from "@/components/ui/address";
 import { Amount } from "@/components/ui/amount";
@@ -13,13 +13,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/typography";
 import { previewCommission } from "@/lib/admin/commission";
 import { adminCpcvInputSchema, dayToIsoDate, fieldErrors, isoDateToDay, protocolDateIssues, type CpcvField } from "@/lib/admin/cpcv-input";
+import { nifChecksumWarning } from "@/lib/admin/nif";
 import { isEventStream, readSseEvents } from "@/lib/admin/sse-parser";
 import { formatBps, formatDate, formatRelativeDays, parseEurToCents, truncateAddress } from "@/lib/format";
-import type { AdminAgentsResponse, AdminCpcvInput, PipelineEvent } from "@/lib/types/api";
+import type { AdminAgentsResponse, AdminCpcvDocumentConfigResponse, AdminCpcvInput, PipelineEvent } from "@/lib/types/api";
 import { DAY_SECS } from "@/lib/units";
 
 import { adminFetch, errorFromResponse, redirectToLogin, toAdminApiError } from "./api";
 import { LoadError } from "./confirm-dialog";
+import { CpcvUploadCard, pdfHint, PdfFieldMark, precheckPdf, prefillMarks, uploadCpcvPdf, type CpcvUploadState, type PrefillKey, type PrefillMark } from "./cpcv-upload";
 import { demoDeal } from "./demo-data";
 import { applyPipelineEvent, currentStep, idlePipeline, PIPELINE, PipelineSteps, type PipelineState } from "./pipeline-steps";
 import { useAdminResource } from "./use-admin-resource";
@@ -150,6 +152,14 @@ export function NewCpcvPanel() {
   const [outcome, setOutcome] = useState<Outcome>({});
   const [demoCount, setDemoCount] = useState(0);
   const [lastInput, setLastInput] = useState<AdminCpcvInput | null>(null);
+  // The signed CPCV PDF (optional) and what Claude read from it.
+  const docConfig = useAdminResource<AdminCpcvDocumentConfigResponse>("/api/admin/cpcv/documents");
+  const [upload, setUpload] = useState<CpcvUploadState>({ phase: "idle" });
+  // Bumped on every new upload or removal, so a slower, older upload can't overwrite the newer state.
+  const uploadSeq = useRef(0);
+  const attached = upload.phase === "done" ? upload.result : null;
+  const marks = attached?.extraction ? prefillMarks(attached.extraction) : null;
+  const uploadBusy = upload.phase === "uploading" || upload.phase === "reading";
 
   const clock = agents.data?.clock ?? null;
   // Protocol "today" (spec §5.7) for the default dates and the date checks;
@@ -167,6 +177,73 @@ export function NewCpcvPanel() {
     if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
   };
 
+  /** Raw input values, to tell "from the PDF" from "edited". */
+  const current: Record<PrefillKey, string> = {
+    buyerName: form.buyerName,
+    buyerNif: form.buyerNif,
+    sellerName: form.sellerName,
+    sellerNif: form.sellerNif,
+    propertyAddress: form.propertyAddress,
+    salePrice: form.salePrice,
+    ratePct: form.ratePct,
+    cpcvDate,
+    escrituraDate,
+  };
+  /** Label with the "from the PDF" / "edited" / "not in the PDF" mark. */
+  const label = (key: PrefillKey, text: string) => (
+    <>
+      {text}
+      <PdfFieldMark mark={marks?.[key]} current={current[key]} />
+    </>
+  );
+  const hint = (key: PrefillKey, base?: string, extraWarnings?: (string | null)[]) => pdfHint({ mark: marks?.[key], current: current[key], base, extraWarnings });
+
+  /** Fills the inputs Claude found a value for (the admin reviews and edits them). */
+  const applyPrefill = (found: Record<PrefillKey, PrefillMark>) => {
+    const values: Partial<FormState> = {};
+    for (const key of Object.keys(found) as PrefillKey[]) {
+      const value = found[key].value;
+      if (value !== null) values[key] = value;
+    }
+    setForm((f) => ({ ...f, ...values }));
+    setErrors((e) => {
+      const next = { ...e };
+      for (const key of Object.keys(values) as PrefillKey[]) delete next[FIELD_OF[key]];
+      return next;
+    });
+  };
+
+  const uploadPdf = async (file: File) => {
+    const seq = ++uploadSeq.current;
+    const problem = await precheckPdf(file);
+    if (seq !== uploadSeq.current) return;
+    if (problem) {
+      setUpload({ phase: "error", message: problem });
+      return;
+    }
+    setUpload({ phase: "uploading", fileName: file.name, progress: 0 });
+    try {
+      const result = await uploadCpcvPdf(file, {
+        progress: (progress) => {
+          if (seq === uploadSeq.current) setUpload({ phase: "uploading", fileName: file.name, progress });
+        },
+        sent: () => {
+          if (seq === uploadSeq.current) setUpload({ phase: "reading", fileName: file.name });
+        },
+      });
+      if (seq !== uploadSeq.current) return;
+      setUpload({ phase: "done", result });
+      if (result.extraction) applyPrefill(prefillMarks(result.extraction));
+    } catch (err) {
+      if (seq === uploadSeq.current) setUpload({ phase: "error", message: toAdminApiError(err).message });
+    }
+  };
+
+  const removePdf = () => {
+    uploadSeq.current++;
+    setUpload({ phase: "idle" });
+  };
+
   const candidate = (): unknown => ({
     agentId: form.agentId,
     buyerName: form.buyerName,
@@ -181,6 +258,7 @@ export function NewCpcvPanel() {
     commissionRateBps: rateToBps(form.ratePct) ?? NaN,
     cpcvDate,
     escrituraDate,
+    ...(attached ? { documentId: attached.documentId } : {}),
   });
 
   const fillDemo = () => {
@@ -257,6 +335,7 @@ export function NewCpcvPanel() {
     setPhase("form");
     setPipeline(idlePipeline());
     setOutcome({});
+    removePdf();
   };
 
   return (
@@ -276,87 +355,103 @@ export function NewCpcvPanel() {
       {agents.error && !agents.data && <LoadError error={agents.error} onRetry={agents.refresh} />}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <Card padding="lg">
-          <form
-            noValidate
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-          >
-            <fieldset disabled={running} className="grid gap-5 sm:grid-cols-2">
-              <legend className="sr-only">CPCV details</legend>
-              <Field
-                label="Agent"
-                required
-                error={errors.agentId}
-                className="sm:col-span-2"
-                hint={
-                  !agents.loading && readyAgents.length === 0
-                    ? "No agent has a smart account yet: they appear here once they finish onboarding."
-                    : "The note is minted to this agent's smart account."
-                }
-              >
-                {agents.loading ? (
-                  <Skeleton className="h-11 w-full rounded-xl" />
-                ) : (
-                  <Select value={form.agentId} onChange={(e) => set("agentId", e.target.value)}>
-                    <option value="">Choose an agent…</option>
-                    {readyAgents.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.displayName ? `${a.displayName} · ` : ""}
-                        {a.email} · {truncateAddress(a.smartAccount!)}
-                      </option>
-                    ))}
-                    {pendingAgents.map((a) => (
-                      <option key={a.id} value={a.id} disabled>
-                        {a.email} (no smart account yet)
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
+        <div className="flex min-w-0 flex-col gap-6">
+          <CpcvUploadCard
+            state={upload}
+            aiPrefill={docConfig.data?.aiPrefill ?? null}
+            disabled={running || phase === "done"}
+            onFile={(file) => void uploadPdf(file)}
+            onRemove={removePdf}
+          />
+          <Card padding="lg">
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+            >
+              <fieldset disabled={running} className="grid gap-5 sm:grid-cols-2">
+                <legend className="sr-only">CPCV details</legend>
+                <Field
+                  label="Agent"
+                  required
+                  error={errors.agentId}
+                  className="sm:col-span-2"
+                  hint={
+                    !agents.loading && readyAgents.length === 0
+                      ? "No agent has a smart account yet: they appear here once they finish onboarding."
+                      : "The note is minted to this agent's smart account."
+                  }
+                >
+                  {agents.loading ? (
+                    <Skeleton className="h-11 w-full rounded-xl" />
+                  ) : (
+                    <Select value={form.agentId} onChange={(e) => set("agentId", e.target.value)}>
+                      <option value="">Choose an agent…</option>
+                      {readyAgents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.displayName ? `${a.displayName} · ` : ""}
+                          {a.email} · {truncateAddress(a.smartAccount!)}
+                        </option>
+                      ))}
+                      {pendingAgents.map((a) => (
+                        <option key={a.id} value={a.id} disabled>
+                          {a.email} (no smart account yet)
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
 
-              <Field label="Buyer name" required error={errors.buyerName}>
-                <Input value={form.buyerName} onChange={(e) => set("buyerName", e.target.value)} autoComplete="off" />
-              </Field>
-              <Field label="Buyer NIF" required error={errors.buyerNif}>
-                <Input value={form.buyerNif} onChange={(e) => set("buyerNif", onlyDigits(e.target.value))} inputMode="numeric" maxLength={9} placeholder="9 digits" autoComplete="off" />
-              </Field>
-              <Field label="Seller name" required error={errors.sellerName}>
-                <Input value={form.sellerName} onChange={(e) => set("sellerName", e.target.value)} autoComplete="off" />
-              </Field>
-              <Field label="Seller NIF" required error={errors.sellerNif}>
-                <Input value={form.sellerNif} onChange={(e) => set("sellerNif", onlyDigits(e.target.value))} inputMode="numeric" maxLength={9} placeholder="9 digits" autoComplete="off" />
-              </Field>
-              <Field label="Property address" required error={errors.propertyAddress} className="sm:col-span-2">
-                <Textarea value={form.propertyAddress} onChange={(e) => set("propertyAddress", e.target.value)} rows={2} placeholder="Rua Augusta 100, 1100-053 Lisboa" />
-              </Field>
-              <Field label="Sale price" required error={errors.salePriceCents}>
-                <NumberInput value={form.salePrice} onValueChange={(v) => set("salePrice", v)} decimals={2} prefix="€" placeholder="300,000" />
-              </Field>
-              <Field label="Commission rate" required error={errors.commissionRateBps} hint="Between 1% and 10%.">
-                <NumberInput value={form.ratePct} onValueChange={(v) => set("ratePct", v)} decimals={2} suffix="%" placeholder="5" />
-              </Field>
-              <Field label="CPCV date" required error={errors.cpcvDate}>
-                <Input type="date" value={cpcvDate} onChange={(e) => set("cpcvDate", e.target.value)} />
-              </Field>
-              <Field label="Escritura date" required error={errors.escrituraDate} hint={protocolDay !== null ? `Protocol date today: ${formatDate(protocolDay)}` : undefined}>
-                <Input type="date" value={escrituraDate} onChange={(e) => set("escrituraDate", e.target.value)} />
-              </Field>
-            </fieldset>
+                <Field label={label("buyerName", "Buyer name")} required error={errors.buyerName} hint={hint("buyerName")}>
+                  <Input value={form.buyerName} onChange={(e) => set("buyerName", e.target.value)} autoComplete="off" />
+                </Field>
+                <Field label={label("buyerNif", "Buyer NIF")} required error={errors.buyerNif} hint={hint("buyerNif", undefined, [nifChecksumWarning(form.buyerNif, "Buyer")])}>
+                  <Input value={form.buyerNif} onChange={(e) => set("buyerNif", onlyDigits(e.target.value))} inputMode="numeric" maxLength={9} placeholder="9 digits" autoComplete="off" />
+                </Field>
+                <Field label={label("sellerName", "Seller name")} required error={errors.sellerName} hint={hint("sellerName")}>
+                  <Input value={form.sellerName} onChange={(e) => set("sellerName", e.target.value)} autoComplete="off" />
+                </Field>
+                <Field label={label("sellerNif", "Seller NIF")} required error={errors.sellerNif} hint={hint("sellerNif", undefined, [nifChecksumWarning(form.sellerNif, "Seller")])}>
+                  <Input value={form.sellerNif} onChange={(e) => set("sellerNif", onlyDigits(e.target.value))} inputMode="numeric" maxLength={9} placeholder="9 digits" autoComplete="off" />
+                </Field>
+                <Field label={label("propertyAddress", "Property address")} required error={errors.propertyAddress} className="sm:col-span-2" hint={hint("propertyAddress")}>
+                  <Textarea value={form.propertyAddress} onChange={(e) => set("propertyAddress", e.target.value)} rows={2} placeholder="Rua Augusta 100, 1100-053 Lisboa" />
+                </Field>
+                <Field label={label("salePrice", "Sale price")} required error={errors.salePriceCents} hint={hint("salePrice")}>
+                  <NumberInput value={form.salePrice} onValueChange={(v) => set("salePrice", v)} decimals={2} prefix="€" placeholder="300,000" />
+                </Field>
+                <Field label={label("ratePct", "Commission rate")} required error={errors.commissionRateBps} hint={hint("ratePct", "Between 1% and 10%.")}>
+                  <NumberInput value={form.ratePct} onValueChange={(v) => set("ratePct", v)} decimals={2} suffix="%" placeholder="5" />
+                </Field>
+                <Field label={label("cpcvDate", "CPCV date")} required error={errors.cpcvDate} hint={hint("cpcvDate")}>
+                  <Input type="date" value={cpcvDate} onChange={(e) => set("cpcvDate", e.target.value)} />
+                </Field>
+                <Field
+                  label={label("escrituraDate", "Escritura date")}
+                  required
+                  error={errors.escrituraDate}
+                  hint={hint("escrituraDate", protocolDay !== null ? `Protocol date today: ${formatDate(protocolDay)}` : undefined)}
+                >
+                  <Input type="date" value={escrituraDate} onChange={(e) => set("escrituraDate", e.target.value)} />
+                </Field>
+              </fieldset>
 
-            <div className="mt-6 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="flex items-start gap-2 text-xs leading-relaxed text-muted">
-                <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-primary-text" />
-                Names, NIFs, price, rate, address and CPCV date stay encrypted in explorador&apos;s database; only the commission, the agent&apos;s address and the escritura date go on-chain.
-              </p>
-              <Button type="submit" size="lg" arrow loading={running} disabled={phase !== "form" && phase !== "failed"}>
-                Generate proof &amp; mint
-              </Button>
-            </div>
-          </form>
-        </Card>
+              <div className="mt-6 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="flex items-start gap-2 text-xs leading-relaxed text-muted">
+                  <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-primary-text" />
+                  {uploadBusy
+                    ? "Waiting for the signed PDF to finish uploading, so it is attached to this CPCV."
+                    : `Names, NIFs, price, rate, address and CPCV date${attached ? ", and the signed PDF," : ""} stay encrypted in explorador's database; only the commission, the agent's address and the escritura date go on-chain.`}
+                </p>
+                <Button type="submit" size="lg" arrow loading={running} disabled={(phase !== "form" && phase !== "failed") || uploadBusy}>
+                  Generate proof &amp; mint
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
 
         <div className="flex flex-col gap-6 lg:sticky lg:top-24">
           <LivePreview salePrice={form.salePrice} ratePct={form.ratePct} escrituraDate={escrituraDate} protocolDay={protocolDay} />

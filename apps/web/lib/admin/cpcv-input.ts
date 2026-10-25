@@ -79,6 +79,8 @@ export const adminCpcvInputSchema = z
       .max(MAX_RATE_BPS, "Commission rate must be at most 10%"),
     cpcvDate: isoDate,
     escrituraDate: isoDate,
+    /** The signed PDF uploaded with POST /api/admin/cpcv/documents (optional: manual entry needs none). */
+    documentId: z.string().trim().min(1).max(64).optional(),
   })
   .superRefine((v, ctx) => {
     if (v.buyerNif === v.sellerNif) {

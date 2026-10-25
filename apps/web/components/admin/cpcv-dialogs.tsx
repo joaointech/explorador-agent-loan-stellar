@@ -20,6 +20,7 @@ import { DAY_SECS, PARAMS } from "@/lib/units";
 
 import { postAdmin } from "./api";
 import { ConfirmDialog } from "./confirm-dialog";
+import { cpcvPdfUrl } from "./cpcv-upload";
 import { useAdminResource } from "./use-admin-resource";
 
 const noteLabel = (row: AdminCpcvRow) => (row.noteId !== null ? `#${row.noteId}` : "");
@@ -201,6 +202,16 @@ function DetailBody({ row }: { row: AdminCpcvRow }) {
             <CardRow label="Sale price" value={formatCents(row.salePriceCents)} />
             <CardRow label="Commission rate" value={formatBps(row.commissionRateBps)} />
             <CardRow label="CPCV date" value={formatDate(row.cpcvDay)} />
+            {row.document && (
+              <CardRow
+                label="Signed CPCV"
+                value={
+                  <a href={cpcvPdfUrl(row.id)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 font-semibold text-primary-text hover:underline">
+                    {row.document.fileName} <ArrowUpRight aria-hidden className="size-3.5" />
+                  </a>
+                }
+              />
+            )}
           </Rows>
         )}
       </section>

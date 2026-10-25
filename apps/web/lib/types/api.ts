@@ -399,7 +399,100 @@ export interface AdminCpcvInput {
   commissionRateBps: number; // 100…1000
   cpcvDate: string; // YYYY-MM-DD
   escrituraDate: string; // YYYY-MM-DD, after cpcvDate and after the protocol date
+  /** CpcvDocument.id from POST /api/admin/cpcv/documents: the signed PDF to link to this CPCV (refused if already linked). */
+  documentId?: string;
 }
+
+// ---------- signed CPCV PDF (admin): upload + Claude prefill ----------
+
+/** A field of the New CPCV form that Claude reads from the signed PDF. */
+export type CpcvExtractionField =
+  | "buyerName"
+  | "buyerNif"
+  | "sellerName"
+  | "sellerNif"
+  | "propertyAddress"
+  | "salePriceCents"
+  | "cpcvDate"
+  | "escrituraDate"
+  | "commissionRateBps";
+
+export type ExtractionConfidence = "high" | "medium" | "low";
+
+/** One value read from the PDF: null when the contract doesn't state it (or it failed explorador's checks). */
+export interface CpcvExtractedValue<T> {
+  value: T | null;
+  confidence: ExtractionConfidence;
+  /** Claude's note (English): where it was found, conflicts, assumptions. */
+  note: string | null;
+  /** explorador's checks on the value, e.g. a NIF that fails the mod-11 check digit. Shown next to the field. */
+  warnings: string[];
+}
+
+/** What Claude read from a signed CPCV. Values use the AdminCpcvInput units (cents, bps, YYYY-MM-DD). */
+export interface CpcvExtraction {
+  fields: {
+    buyerName: CpcvExtractedValue<string>;
+    buyerNif: CpcvExtractedValue<string>; // 9 digits
+    sellerName: CpcvExtractedValue<string>;
+    sellerNif: CpcvExtractedValue<string>;
+    propertyAddress: CpcvExtractedValue<string>;
+    salePriceCents: CpcvExtractedValue<number>;
+    cpcvDate: CpcvExtractedValue<string>; // signing date
+    escrituraDate: CpcvExtractedValue<string>; // deed deadline, when the contract states one
+    commissionRateBps: CpcvExtractedValue<number>; // usually not in a buyer–seller CPCV
+  };
+  /** Document-level warnings (English): not a CPCV, conflicting figures, missing pages… */
+  warnings: string[];
+  /** Model that produced the reading (a server-side refusal fallback may have served it). */
+  model: string;
+}
+
+export type CpcvExtractionErrorCode =
+  | "AI_NOT_CONFIGURED" // no ANTHROPIC_API_KEY: fill the form manually
+  | "AI_REFUSED" // stop_reason "refusal" (after the server-side fallback)
+  | "AI_BAD_OUTPUT" // truncated or not matching the schema
+  | "AI_TIMEOUT"
+  | "AI_RATE_LIMITED"
+  | "AI_AUTH" // key rejected (401/403)
+  | "AI_REJECTED" // 400 from the API, e.g. a password-protected PDF
+  | "AI_UNAVAILABLE" // 5xx / overloaded / network
+  | "AI_ERROR";
+
+export interface CpcvExtractionError {
+  code: CpcvExtractionErrorCode;
+  message: string;
+}
+
+// POST /api/admin/cpcv/documents (admin): multipart/form-data with one field, `file` (a PDF ≤ 4 MB), and the
+// `X-Advance-Upload: 1` header. The PDF is stored encrypted whatever happens to the extraction.
+export interface AdminCpcvDocumentUploadRequest {
+  file: File;
+}
+export interface AdminCpcvDocumentResponse {
+  documentId: string;
+  fileName: string;
+  sizeBytes: number;
+  sha256: string; // hex, of the PDF
+  /** null when the AI prefill is off or failed: the admin fills the form manually. */
+  extraction: CpcvExtraction | null;
+  extractionError?: CpcvExtractionError;
+}
+
+// GET /api/admin/cpcv/documents (admin): whether uploads are read by Claude on this server
+export interface AdminCpcvDocumentConfigResponse {
+  aiPrefill: boolean;
+  maxBytes: number;
+  model: string;
+}
+
+/** The signed PDF linked to a CPCV (GET /api/admin/cpcv/[id]/document serves it). */
+export interface AdminCpcvDocumentInfo {
+  fileName: string;
+  sizeBytes: number;
+  uploadedAt: IsoTime;
+}
+
 export type PipelineStep = "validating" | "signing" | "proving" | "verifying" | "minting" | "done";
 export interface PipelineEvent {
   step: PipelineStep;
@@ -434,6 +527,8 @@ export interface AdminCpcvRow {
   overdue: boolean;
   /** True when piiEncrypted could not be decrypted (wrong key); the PII fields are then empty. */
   piiUnavailable?: boolean;
+  /** The signed CPCV PDF, when one was uploaded with the deal ("View PDF"). */
+  document?: AdminCpcvDocumentInfo | null;
 }
 
 // GET /api/admin/cpcv (admin): newest first

@@ -45,6 +45,15 @@ const schema = z.object({
     .string()
     .optional()
     .transform((v) => v === undefined || v.trim() === "" || v.trim() === "true"),
+  /**
+   * Opt-in (off unless exactly "true"): in DEMO_MODE, also return the sign-in
+   * code of seeded demo-domain accounts that are in ADMIN_EMAILS. Anyone who
+   * can open the site can then sign in as that admin.
+   */
+  DEMO_ADMIN_SIGNIN: z
+    .string()
+    .optional()
+    .transform((v) => v?.trim() === "true"),
 
   ATTESTER_EDDSA_PRIVKEY: optional,
   NULLIFIER_SECRET: optional,
@@ -63,6 +72,11 @@ let cached: Env | undefined;
 export function env(): Env {
   cached ??= schema.parse(process.env);
   return cached;
+}
+
+/** Test hook: re-read process.env on the next `env()` call. */
+export function resetEnvCache(): void {
+  cached = undefined;
 }
 
 type OptionalKey = {

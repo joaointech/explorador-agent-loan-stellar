@@ -67,9 +67,12 @@ export interface EmailStartResponse {
   expiresAt: IsoTime;
   /** Wait this long before asking for another code. */
   resendAfterSecs: number;
-  /** "email" = sent with Resend; "console" = RESEND_API_KEY unset, code printed in the server log; "demo" = seeded demo account in DEMO_MODE. */
+  /**
+   * "email" = sent with Resend; "console" = code printed in the server log (RESEND_API_KEY unset, or a
+   * seeded demo admin without DEMO_ADMIN_SIGNIN); "demo" = seeded demo account in DEMO_MODE, code in `demoCode`.
+   */
   delivery: "email" | "console" | "demo";
-  /** Only for seeded demo accounts (@demo.explorador.pt) while DEMO_MODE is on: they have no real inbox. */
+  /** Only for seeded demo accounts (@demo.explorador.pt) while DEMO_MODE is on (admins also need DEMO_ADMIN_SIGNIN=true). */
   demoCode?: string;
 }
 

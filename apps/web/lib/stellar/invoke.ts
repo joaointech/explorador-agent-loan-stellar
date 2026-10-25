@@ -20,7 +20,7 @@ import {
 
 import { networkConfig, operatorKeypair } from "./config";
 import { requireDeployment } from "./deployment";
-import { feeFitsUint32, signedSorobanEnvelope } from "./envelope";
+import { feeFitsUint32, resourceLimitExceeded, signedSorobanEnvelope } from "./envelope";
 import { ContractError, HostError, MissingSignerError, TxError, parseHostError } from "./errors";
 import { withAccountLock } from "./lock";
 import { getRpc, rpcCall, sleep } from "./rpc";
@@ -66,12 +66,18 @@ export async function invokeContract<T = void>(params: InvokeParams<T>): Promise
   return withAccountLock(params.source.publicKey(), async () => {
     let badSeq = 0;
     let restores = 0;
+    let resourceRetries = 0;
     for (;;) {
       try {
         return await buildSignSubmit(params);
       } catch (err) {
         // Another process used the key without the lock: rebuild once with a fresh sequence number.
         if (err instanceof TxError && err.resultCode === "txBadSeq" && ++badSeq < 2) continue;
+        // The state changed between simulation and execution (the entry grew): re-simulate.
+        if (err instanceof TxError && err.resourceLimitExceeded && ++resourceRetries <= 2) {
+          console.warn(`[stellar] ${params.fn}: ran out of its simulated resources (tx ${err.txHash}); re-simulating`);
+          continue;
+        }
         // Archived entries (contract code/instance untouched for ~30 days, notes/lines/agents for ~90):
         // restore them (source pays) and rebuild. Protocol 23+ simulations usually restore inside the
         // transaction itself instead (archived entries in the Soroban data), which needs no extra step.
@@ -257,5 +263,5 @@ function failedTxError(res: rpc.Api.GetFailedTransactionResponse, fn: string, ha
     // fall through to the result code
   }
   const code = res.resultXdr?.result.type;
-  return new TxError("TX_FAILED", `${fn} failed on-chain (${code ?? "unknown"}), tx ${hash}`, hash, code);
+  return new TxError("TX_FAILED", `${fn} failed on-chain (${code ?? "unknown"}), tx ${hash}`, hash, code, resourceLimitExceeded(res.resultXdr));
 }

@@ -160,15 +160,15 @@ docker-compose.yml        Postgres 16 for local development (host port 5433)
 
 ## Live testnet deployment
 
-Recorded in [`deployments/testnet.json`](./deployments/testnet.json): deployed 25 Oct 2026 by `pnpm demo:reset`, `DEMO_MODE` on.
+The production deployment behind **https://advance.explorador.ai**, recorded in [`deployments/testnet.json`](./deployments/testnet.json): deployed 25 Oct 2026 by `pnpm demo:reset` with production's own keys, `DEMO_MODE` on. (A local checkout keeps its own deployment in its own database's active `Deployment` row.)
 
 | Contract | Id |
 |---|---|
-| `teurc` (tEURC, SEP-41) | [`CBQAP2CNY2ZY54PS74HAPSS2MVHZNIHWFC3CZQLK6TKTYPW4IB6OIULF`](https://stellar.expert/explorer/testnet/contract/CBQAP2CNY2ZY54PS74HAPSS2MVHZNIHWFC3CZQLK6TKTYPW4IB6OIULF) |
-| `cpcv_note` (eaNOTE, SEP-50) | [`CA4DEKS56LV6BNKBIKXGCCYDQ2BJEV7OTI73OBNJRCA6SGUEJARHXINV`](https://stellar.expert/explorer/testnet/contract/CA4DEKS56LV6BNKBIKXGCCYDQ2BJEV7OTI73OBNJRCA6SGUEJARHXINV) |
-| `advance_pool` (eaSR, SEP-56) | [`CBZGR3MQFKWSLW6VS4BHOJ6FC3EKKJ2OZ47SU4XTE7GYVPPEAAFOEMNU`](https://stellar.expert/explorer/testnet/contract/CBZGR3MQFKWSLW6VS4BHOJ6FC3EKKJ2OZ47SU4XTE7GYVPPEAAFOEMNU) |
+| `teurc` (tEURC, SEP-41) | [`CALF4P2BE6RO5NH4N4W5MG7TUAR4VFEBTQ2EIWRPQHTB3K5NGWFWJYEO`](https://stellar.expert/explorer/testnet/contract/CALF4P2BE6RO5NH4N4W5MG7TUAR4VFEBTQ2EIWRPQHTB3K5NGWFWJYEO) |
+| `cpcv_note` (eaNOTE, SEP-50) | [`CB4L4OXWRN5NWQSIZXYS6XWKZ4GEUJAJXRINATC6W2SOSCMUI44L2JDY`](https://stellar.expert/explorer/testnet/contract/CB4L4OXWRN5NWQSIZXYS6XWKZ4GEUJAJXRINATC6W2SOSCMUI44L2JDY) |
+| `advance_pool` (eaSR, SEP-56) | [`CAXL6SAKTREO7QOEHIRGTPHHL34MUNGXK5RN4PS3TKMGFWF4ZSXWV3Q5`](https://stellar.expert/explorer/testnet/contract/CAXL6SAKTREO7QOEHIRGTPHHL34MUNGXK5RN4PS3TKMGFWF4ZSXWV3Q5) |
 
-The wasm hashes (`teurc` `761716af…72e6`, `cpcv_note` `a52f94d1…2565`, `advance_pool` `299d6e9f…76e3`) match a local `pnpm contracts:build` of this source byte for byte. Roles: admin [`GADM…3RWW`](https://stellar.expert/explorer/testnet/account/GADMCAK3SSHGRAL7JS3XUQID7UZLAY4A57UR4W5VOY7TKTNARVHB3RWW), operator [`GDLV…KQYT`](https://stellar.expert/explorer/testnet/account/GDLVQ5V5OZ4TGYHJGESUR5X4YAPBILXJSMALA56MILPJYBGS7XRBKQYT), treasury [`GBDC…LI5K`](https://stellar.expert/explorer/testnet/account/GBDCCBA6CRR5VYZ7YLCSIZKMOOPOJ5MWT36RG23A5HMX5LJIUH5YLI5K), card settlement [`GAHT…O2ZP`](https://stellar.expert/explorer/testnet/account/GAHT6VRCGSMA7DVPINHXD7K4KYKVYI246ZKPRIL4B6LVKTNGLYGSO2ZP).
+The wasm hashes (`teurc` `761716af…72e6`, `cpcv_note` `a52f94d1…2565`, `advance_pool` `299d6e9f…76e3`) match a local `pnpm contracts:build` of this source byte for byte. Roles: admin [`GBHX…FR26`](https://stellar.expert/explorer/testnet/account/GBHXOJV74WLYOGNZIF7HLVETM5N25BEBUZETUEDGF2ZDMSL4PYSAFR26), operator [`GCB6…PSML3`](https://stellar.expert/explorer/testnet/account/GCB6ZCYKURRWI2PLVYLDCFPIEIZLQPFCXVFI2NWBCHLGASKE7MAPSML3), treasury [`GBFQ…GAPV2`](https://stellar.expert/explorer/testnet/account/GBFQEQE53VWHFAKMRQAOV73UJM7FLK4WAEWYFZHRHULX4TCYKKZGAPV2), card settlement [`GCFY…TWBH4`](https://stellar.expert/explorer/testnet/account/GCFYLJU6KPEWZNKVTRYN3P6QRLTR7BYGTXE2JCXD2N7NXDHB6SZTWBH4).
 
 Seeded state, read from the chain on 25 Oct 2026 at 17:50 UTC:
 

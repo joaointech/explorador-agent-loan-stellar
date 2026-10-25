@@ -365,7 +365,18 @@ export async function submitSponsored(
       // the caller sent none), plus the fee-bump fallback for resource fees above uint32.
       const auth = signedAuth.length > 0 ? signedAuth : (sim.result?.auth ?? []);
       const prepared = sponsorEnvelope(sourceOf(tx), Operation.invokeHostFunction({ func, auth }), sim.transactionData.build());
-      const res = await sendAndPoll(prepared, opts);
+      let res: Awaited<ReturnType<typeof sendAndPoll>>;
+      try {
+        res = await sendAndPoll(prepared, opts);
+      } catch (err) {
+        // Ran out of the simulated resources because the state changed between simulation and
+        // execution (e.g. a parallel transaction grew the same entry): re-simulate and resubmit.
+        if (err instanceof ChainTxError && err.code === "TX_FAILED" && /ExceededLimit|resource limit exceeded/i.test(err.message) && attempt < 3) {
+          console.warn(`[stellar] sponsored tx ${err.txHash} ran out of its simulated resources; re-simulating`);
+          continue;
+        }
+        throw err;
+      }
       if (res.kind === "success") return { txHash: res.hash, ledger: res.ledger, returnValue: res.returnValue };
       if (res.kind === "busy" || res.code === "txBadSeq") {
         await new Promise((r) => setTimeout(r, 1500));

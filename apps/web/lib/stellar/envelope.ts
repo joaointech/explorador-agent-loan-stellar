@@ -66,3 +66,18 @@ export function signedSorobanEnvelope(input: {
   bump.sign(source);
   return bump;
 }
+
+/**
+ * True when a failed transaction ran out of the resources its simulation
+ * declared (`invokeHostFunctionResourceLimitExceeded`): the state changed between
+ * simulation and execution (e.g. another transaction grew the same entry), so a
+ * fresh simulation and resubmission usually succeeds.
+ */
+export function resourceLimitExceeded(result: xdr.TransactionResult | undefined): boolean {
+  let outcome: xdr.TransactionResultResult | xdr.InnerTransactionResultResult | undefined = result?.result;
+  if (outcome?.type === "txFeeBumpInnerFailed") outcome = outcome.innerResultPair.result.result;
+  if (outcome?.type !== "txFailed") return false;
+  const op = outcome.results[0];
+  if (op?.type !== "opInner" || op.tr.type !== "invokeHostFunction") return false;
+  return op.tr.invokeHostFunctionResult.type === "invokeHostFunctionResourceLimitExceeded";
+}

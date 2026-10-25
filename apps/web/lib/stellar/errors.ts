@@ -142,6 +142,8 @@ export class TxError extends HttpError {
     message: string,
     readonly txHash: string | null,
     readonly resultCode?: string,
+    /** Ran out of its simulated resources: re-simulating and resubmitting can succeed. */
+    readonly resourceLimitExceeded = false,
   ) {
     super(code === "TX_TIMEOUT" ? 504 : 502, code, message);
   }

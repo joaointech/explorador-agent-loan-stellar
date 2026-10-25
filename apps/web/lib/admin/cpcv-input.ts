@@ -66,13 +66,14 @@ export const adminCpcvInputSchema = z
       .min(5, "Enter the property address")
       .max(200)
       .refine((v) => normalizedAddressBytes(v) <= MAX_ADDRESS_BYTES, `The address is too long (max ${MAX_ADDRESS_BYTES} bytes)`),
+    // `error` covers a missing or unparsable amount (the form sends NaN for an empty field).
     salePriceCents: z
-      .number()
+      .number({ error: "Enter the sale price" })
       .int("Sale price must be in whole cents")
       .positive("Enter the sale price")
       .max(MAX_SALE_PRICE_CENTS, "Sale price is above €100,000,000"),
     commissionRateBps: z
-      .number()
+      .number({ error: "Enter the commission rate" })
       .int("Commission rate must be whole basis points")
       .min(MIN_RATE_BPS, "Commission rate must be at least 1%")
       .max(MAX_RATE_BPS, "Commission rate must be at most 10%"),

@@ -75,8 +75,8 @@ export function CardHeader({
   titleAs?: ElementType;
 }) {
   return (
-    <div className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-2", className)}>
-      <div className="min-w-0">
+    <div className={cn("flex items-start justify-between gap-x-4 gap-y-2", className)}>
+      <div className="min-w-0 flex-1">
         {eyebrow && <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">{eyebrow}</p>}
         <TitleTag className={cn("text-base font-bold text-heading sm:text-lg", eyebrow ? "mt-1" : undefined)}>{title}</TitleTag>
         {description && <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p>}

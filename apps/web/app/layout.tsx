@@ -6,7 +6,7 @@ import "./globals.css";
 import { Footer } from "@/components/shell/footer";
 import { Header } from "@/components/shell/header";
 import { Providers } from "@/components/shell/providers";
-import { THEME_INIT_SCRIPT } from "@/components/theme/theme";
+import { ThemeScript } from "@/components/theme/theme-script";
 
 // Sora, explorador's single typeface (variable, weights 100–800), self-hosted
 // from app/fonts like explorador.pt (OFL licence alongside). Drives both
@@ -46,7 +46,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         {/* Render-blocking on purpose: resolves Light/System/Dark from
             localStorage + OS before first paint, so there is no flash. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <ThemeScript />
       </head>
       <body className="flex min-h-full flex-col bg-bg font-sans text-fg" suppressHydrationWarning>
         <Providers>

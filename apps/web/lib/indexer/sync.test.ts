@@ -225,7 +225,12 @@ describe("runSync / syncIfStale", () => {
     expect(await syncIfStale(60_000)).toBeNull(); // fresh enough: no RPC call
     expect(getEvents).toHaveBeenCalledTimes(3);
 
-    getEvents.mockRejectedValueOnce(Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }));
+    // a single network blip is retried transparently…
+    const hangUp = () => Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+    getEvents.mockRejectedValueOnce(hangUp());
+    expect(await runSync()).toMatchObject({ status: "ok" });
+    // …a persistent failure is reported, never thrown
+    getEvents.mockRejectedValueOnce(hangUp()).mockRejectedValueOnce(hangUp()).mockRejectedValueOnce(hangUp());
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const failed = await runSync();
     expect(failed).toMatchObject({ status: "error" });

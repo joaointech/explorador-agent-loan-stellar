@@ -15,7 +15,7 @@ import { db } from "@/lib/db";
 import { readProtocolNow } from "@/lib/stellar/contracts";
 import { resolveDeployment } from "@/lib/stellar/deployment";
 import { RpcError } from "@/lib/stellar/errors";
-import { getRpc, rpcCall, rpcErrorInfo } from "@/lib/stellar/rpc";
+import { getRpc, retryTransient, rpcCall, rpcErrorInfo } from "@/lib/stellar/rpc";
 
 import { compareEvents, decodeEvent, EventType, ledgerOfCursor, parseCloseTime, type DecodedEvent } from "./events";
 import { anchorFromClockEvent, assignProtocolTimes, needsCurrentOffset, type ClockAnchor } from "./protocol-time";
@@ -63,7 +63,8 @@ export async function fetchEvents(contractIds: string[], fromLedger: number | nu
   const firstPage = (startLedger: number) => rpcCall("getEvents", () => server.getEvents({ startLedger, filters, limit: PAGE_LIMIT }));
   let page: rpc.Api.GetEventsResponse;
   try {
-    page = await server.getEvents({ startLedger: start, filters, limit: PAGE_LIMIT });
+    const startLedger = start;
+    page = await retryTransient(() => server.getEvents({ startLedger, filters, limit: PAGE_LIMIT }));
   } catch (err) {
     const { message } = rpcErrorInfo(err);
     const range = RANGE_ERROR.exec(message);

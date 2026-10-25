@@ -272,6 +272,17 @@ describe.skipIf(!hasTestDb)("agent overview (test database)", () => {
     const { user } = await createUser({ cardEnabledOnChain: true, cachedPosition: jsonify(cachedLive), cachedAt });
     chain.readAgentPosition.mockRejectedValue(notImplemented());
     chain.readPoolStats.mockRejectedValue(notImplemented());
+    // Scope event queries to this test's pool, so ClockAdvanced events other
+    // processes indexed into the shared test database can't win the "newest" query.
+    chain.getDeployment.mockResolvedValue({
+      network: "testnet",
+      rpcUrl: "https://soroban-testnet.stellar.org",
+      networkPassphrase: "Test SDF Network ; September 2015",
+      teurc: "CTEURC",
+      cpcvNote: "CNOTE",
+      advancePool: "CPOOL",
+      explorerBase: "https://stellar.expert/explorer/testnet",
+    });
     // Demo clock: protocol_now was 81 days ahead of the ledger close time.
     const closedAt = NOW_MS / 1000 - 3_600;
     await createEvent("ClockAdvanced", { secs: "6998400", protocolNow: String(closedAt + 81 * 86_400), ledgerClosedAt: new Date(closedAt * 1000).toISOString() }, 50);

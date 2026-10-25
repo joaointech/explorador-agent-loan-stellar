@@ -13,11 +13,11 @@ import type { AgentPosition, DrawResult, LineView, Note, PoolStats } from "@/lib
 import { adminKeypair, treasuryKeypair } from "./config";
 import { decodeAgentPosition, decodeDrawResult, decodeLineView, decodeNote, decodeNotes, decodePoolStats, decodeU32Vec } from "./decode";
 import { resolveDeployment } from "./deployment";
-import { invokeAsOperator, type InvokeResult } from "./invoke";
+import { invokeAsOperator, type InvokeResult, type TxSourceOptions } from "./invoke";
 import { asBigInt, asNumber, scAddress, scBool, scBytes, scI128, scStruct, scU32, scU64 } from "./scval";
 import { readContract } from "./simulate";
 
-export type { InvokeResult } from "./invoke";
+export type { InvokeResult, TxSourceOptions } from "./invoke";
 
 export interface ReadOptions {
   /** RPC simulation timeout in ms (the ASA handler uses 1200). */
@@ -95,7 +95,7 @@ function positive(amount: bigint, what: string): bigint {
 }
 
 /** `cpcv_note.mint`; resolves to the new note id. */
-export async function mintNote(args: MintNoteArgs): Promise<InvokeResult<number>> {
+export async function mintNote(args: MintNoteArgs, tx: TxSourceOptions = {}): Promise<InvokeResult<number>> {
   return invokeAsOperator(
     "cpcvNote",
     "mint",
@@ -107,27 +107,28 @@ export async function mintNote(args: MintNoteArgs): Promise<InvokeResult<number>
       scBytes(args.commitment, 32),
       scBytes(args.nullifier, 32),
     ],
-    { decode: (v) => asNumber(v, "mint") },
+    { ...tx, decode: (v) => asNumber(v, "mint") },
   );
 }
 
-export async function cardDraw(agent: string, amount: bigint, authRef: Uint8Array): Promise<InvokeResult<DrawResult>> {
+export async function cardDraw(agent: string, amount: bigint, authRef: Uint8Array, tx: TxSourceOptions = {}): Promise<InvokeResult<DrawResult>> {
   return invokeAsOperator("advancePool", "card_draw", [scAddress(agent), scI128(positive(amount, "amount")), scBytes(authRef, 32)], {
+    ...tx,
     decode: (v) => decodeDrawResult(v),
   });
 }
 
 /** `advance_pool.settle`, signed by operator + treasury. */
-export async function settleNote(noteId: number): Promise<InvokeResult<void>> {
-  return invokeAsOperator("advancePool", "settle", [scU32(noteId)], { extraSigners: [treasuryKeypair()] });
+export async function settleNote(noteId: number, tx: TxSourceOptions = {}): Promise<InvokeResult<void>> {
+  return invokeAsOperator("advancePool", "settle", [scU32(noteId)], { ...tx, extraSigners: [treasuryKeypair()] });
 }
 
-export async function cancelNote(noteId: number): Promise<InvokeResult<void>> {
-  return invokeAsOperator("advancePool", "cancel", [scU32(noteId)]);
+export async function cancelNote(noteId: number, tx: TxSourceOptions = {}): Promise<InvokeResult<void>> {
+  return invokeAsOperator("advancePool", "cancel", [scU32(noteId)], tx);
 }
 
-export async function writeOff(agent: string): Promise<InvokeResult<void>> {
-  return invokeAsOperator("advancePool", "write_off", [scAddress(agent)]);
+export async function writeOff(agent: string, tx: TxSourceOptions = {}): Promise<InvokeResult<void>> {
+  return invokeAsOperator("advancePool", "write_off", [scAddress(agent)], tx);
 }
 
 export async function setBlocked(agent: string, blocked: boolean): Promise<InvokeResult<void>> {
@@ -150,14 +151,14 @@ export async function claimFees(amount: bigint): Promise<InvokeResult<void>> {
 }
 
 /** Admin-signed; demo mode only. */
-export async function advanceClock(secs: number): Promise<InvokeResult<void>> {
+export async function advanceClock(secs: number, tx: TxSourceOptions = {}): Promise<InvokeResult<void>> {
   if (!Number.isInteger(secs) || secs <= 0) throw badRequest("secs must be a positive integer", "INVALID_AMOUNT");
-  return invokeAsOperator("advancePool", "advance_clock", [scU64(secs)], { extraSigners: [adminKeypair()] });
+  return invokeAsOperator("advancePool", "advance_clock", [scU64(secs)], { ...tx, extraSigners: [adminKeypair()] });
 }
 
 /** Server-side tEURC faucet fallback (spec §9.7 /api/faucet/teurc). */
-export async function faucetTeurc(to: string, amount: bigint): Promise<InvokeResult<void>> {
-  return invokeAsOperator("teurc", "faucet", [scAddress(to), scI128(positive(amount, "amount"))]);
+export async function faucetTeurc(to: string, amount: bigint, tx: TxSourceOptions = {}): Promise<InvokeResult<void>> {
+  return invokeAsOperator("teurc", "faucet", [scAddress(to), scI128(positive(amount, "amount"))], tx);
 }
 
 /** https://stellar.expert/explorer/testnet/{tx|contract|account}/{id} (client components: import from lib/stellar/explorer). */

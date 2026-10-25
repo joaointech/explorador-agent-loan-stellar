@@ -54,22 +54,63 @@ export interface InvokeParams<T> {
   decode?: (retval: xdr.ScVal) => T;
 }
 
+/** The simulation asked for archived ledger entries to be restored first (pre-protocol-23 style preamble). */
+class RestoreRequired extends Error {
+  constructor(readonly preamble: rpc.Api.SimulateTransactionRestoreResponse["restorePreamble"]) {
+    super("restore required");
+  }
+}
+
 /** Invokes a contract function with `source` paying fees, holding the source's lock until the tx is final. */
 export async function invokeContract<T = void>(params: InvokeParams<T>): Promise<InvokeResult<T>> {
   return withAccountLock(params.source.publicKey(), async () => {
-    for (let attempt = 1; ; attempt++) {
+    let badSeq = 0;
+    let restores = 0;
+    for (;;) {
       try {
         return await buildSignSubmit(params);
       } catch (err) {
         // Another process used the key without the lock: rebuild once with a fresh sequence number.
-        if (err instanceof TxError && err.resultCode === "txBadSeq" && attempt < 2) continue;
+        if (err instanceof TxError && err.resultCode === "txBadSeq" && ++badSeq < 2) continue;
+        // Archived entries (contract code/instance untouched for ~30 days, notes/lines/agents for ~90):
+        // restore them (source pays) and rebuild. Protocol 23+ simulations usually restore inside the
+        // transaction itself instead (archived entries in the Soroban data), which needs no extra step.
+        if (err instanceof RestoreRequired && ++restores <= 2) {
+          await restoreFootprint(params.source, err.preamble, params.fn);
+          continue;
+        }
         throw err;
       }
     }
   });
 }
 
-export interface OperatorInvokeOptions<T> {
+async function restoreFootprint(source: Keypair, preamble: RestoreRequired["preamble"], fn: string): Promise<void> {
+  const { networkPassphrase } = networkConfig();
+  const account = await rpcCall("getAccount", () => getRpc().getAccount(source.publicKey()));
+  const tx = signedSorobanEnvelope({
+    source,
+    sequence: account.sequenceNumber(),
+    op: Operation.restoreFootprint({}),
+    data: preamble.transactionData.build(),
+    inclusionFee: BigInt(INCLUSION_FEE),
+    networkPassphrase,
+    timeoutSecs: TX_TIMEOUT_SECS,
+  });
+  console.warn(`[stellar] ${fn}: restoring archived ledger entries first`);
+  await submitAndPoll(tx, `restore for ${fn}`);
+}
+
+export interface TxSourceOptions {
+  /**
+   * Transaction source and fee payer instead of the operator (e.g. a channel
+   * account, so scripts can run operator-authorized calls in parallel). The
+   * operator then signs its auth entry with Address credentials.
+   */
+  source?: Keypair;
+}
+
+export interface OperatorInvokeOptions<T> extends TxSourceOptions {
   /** Extra auth signers: treasury for settle / junior / fees, admin for advance_clock. */
   extraSigners?: Keypair[];
   decode?: (retval: xdr.ScVal) => T;
@@ -77,7 +118,8 @@ export interface OperatorInvokeOptions<T> {
 
 /**
  * `invokeAsOperator(fn, args, extraSigners?)` from spec §9.3, with the target
- * contract named explicitly: the operator is the source and fee payer.
+ * contract named explicitly: the operator is the source and fee payer (unless
+ * `source` names another payer).
  */
 export async function invokeAsOperator<T = void>(
   contract: ContractKey,
@@ -86,12 +128,14 @@ export async function invokeAsOperator<T = void>(
   opts: OperatorInvokeOptions<T> = {},
 ): Promise<InvokeResult<T>> {
   const deployment = await requireDeployment();
+  const operator = operatorKeypair();
+  const source = opts.source ?? operator;
   return invokeContract({
     contractId: deployment.info[contract],
     fn,
     args,
-    source: operatorKeypair(),
-    signers: opts.extraSigners,
+    source,
+    signers: source.publicKey() === operator.publicKey() ? opts.extraSigners : [operator, ...(opts.extraSigners ?? [])],
     decode: opts.decode,
   });
 }
@@ -99,6 +143,7 @@ export async function invokeAsOperator<T = void>(
 async function simulate(tx: Transaction, fn: string, contractId: string): Promise<rpc.Api.SimulateTransactionSuccessResponse> {
   const sim = await rpcCall(`simulate ${fn}`, () => getRpc().simulateTransaction(tx));
   if (rpc.Api.isSimulationError(sim)) throw parseHostError(sim.error, fn, contractId);
+  if (rpc.Api.isSimulationRestore(sim)) throw new RestoreRequired(sim.restorePreamble);
   if (!sim.result) throw new HostError(fn, "simulation returned no result", "");
   return sim;
 }

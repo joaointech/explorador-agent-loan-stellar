@@ -374,6 +374,6 @@ Also needed before real money:
 
 ## Credits
 
-Built with [Claude Code](https://claude.com/claude-code). Parallel Claude agents each owned a workstream in its own git worktree: contracts, circuit, Stellar service, smart accounts, card, agent app, investor dashboard, admin, landing and registry, deploy, and docs. An orchestrator merged them against [`spec.md`](./spec.md), and every judgment call is logged in [`DECISIONS.md`](./DECISIONS.md).
+Built with [Claude Code](https://claude.com/claude-code). Parallel Claude agents each owned a workstream in its own git worktree: contracts, circuit, Stellar service, smart accounts, card, agent app, investor dashboard, admin, landing and registry, deploy, security review, and docs. An orchestrator merged them against [`spec.md`](./spec.md), and every judgment call is logged in [`DECISIONS.md`](./DECISIONS.md).
 
 Built on Stellar and Soroban (BN254 and Poseidon host functions), OpenZeppelin Stellar contracts and smart-account-kit, circom, snarkjs and circomlib (iden3), Lithic's sandbox, Prisma, Next.js, Neon and Vercel. The Sora typeface is used under the SIL Open Font License.

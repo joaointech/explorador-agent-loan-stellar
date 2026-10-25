@@ -20,6 +20,7 @@ import { DAY_SECS } from "@/lib/units";
 
 import { LoadError } from "./confirm-dialog";
 import { CancelDialog, CpcvDetailsDialog, SettleDialog } from "./cpcv-dialogs";
+import { ViewPdfButton } from "./cpcv-upload";
 import { useAdminResource } from "./use-admin-resource";
 
 const FILTERS = [
@@ -227,14 +228,19 @@ export function CpcvsPanel() {
               header: <span className="sr-only">Actions</span>,
               align: "right",
               cell: (r) =>
-                r.status === "MINTED" ? (
+                r.status === "MINTED" || r.document ? (
                   <div className="flex flex-col items-stretch gap-1.5">
-                    <Button size="sm" className="px-3" onClick={() => setDialog({ kind: "settle", row: r })}>
-                      Confirm escritura
-                    </Button>
-                    <Button size="sm" variant="secondary" className="px-3 text-[13px]" onClick={() => setDialog({ kind: "cancel", row: r })}>
-                      Cancel (buyer withdrew)
-                    </Button>
+                    {r.status === "MINTED" && (
+                      <>
+                        <Button size="sm" className="px-3" onClick={() => setDialog({ kind: "settle", row: r })}>
+                          Confirm escritura
+                        </Button>
+                        <Button size="sm" variant="secondary" className="px-3 text-[13px]" onClick={() => setDialog({ kind: "cancel", row: r })}>
+                          Cancel (buyer withdrew)
+                        </Button>
+                      </>
+                    )}
+                    {r.document && <ViewPdfButton cpcvId={r.id} fileName={r.document.fileName} />}
                   </div>
                 ) : null,
             },

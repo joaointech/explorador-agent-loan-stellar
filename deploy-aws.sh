@@ -49,8 +49,10 @@ done
 TAG="${TAG:-prod-$(git rev-parse --short HEAD)}"
 IMG="$ECR/$REPO:$TAG"
 
-SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=15"
-SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no -o BatchMode=yes"
+# The repo and its CI logs are public: nothing below prints a node IP
+# (LogLevel=ERROR also silences ssh's "Permanently added '<ip>'" warning).
+SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=15"
+SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=no -o LogLevel=ERROR -o BatchMode=yes"
 lookup_ip() {
   aws ec2 describe-instances --region "$REGION" \
     --filters "Name=tag:Name,Values=$1" "Name=instance-state-name,Values=running" \
@@ -59,7 +61,7 @@ lookup_ip() {
 MANAGER=$(lookup_ip prod-apps-manager)
 WORKER=$(lookup_ip prod-apps-worker)
 [ -n "$MANAGER" ] && [ -n "$WORKER" ] || { echo "could not resolve node IPs"; exit 1; }
-echo "manager=$MANAGER worker=$WORKER service=$SWARM_SERVICE tag=$TAG"
+echo "nodes found (prod-apps-manager, prod-apps-worker) service=$SWARM_SERVICE tag=$TAG"
 
 # Secrets Manager holds dotenv text (the shape of apps/web/.env.local), but
 # docker's env_file takes everything after `=` verbatim: `KEY="a b"` keeps its
